@@ -1,5 +1,6 @@
 (ns metabase.actions.execution
   (:require
+   [clojure.java.jdbc :as jdbc]
    [clojure.set :as set]
    [medley.core :as m]
    [metabase.actions.actions :as actions]
@@ -10,6 +11,7 @@
    [metabase.legacy-mbql.schema :as mbql.s]
    [metabase.lib.schema.actions :as lib.schema.actions]
    [metabase.lib.schema.id :as lib.schema.id]
+   [metabase.middleware :refer [get-current-user]]
    [metabase.model-persistence.core :as model-persistence]
    [metabase.queries.models.query :as query]
    [metabase.query-processor :as qp]
@@ -35,10 +37,22 @@
                        (assoc parameter :value (get request-parameters (:id parameter))))
           query (-> dataset_query
                     (update :type keyword)
-                    (assoc :parameters parameters))]
-      (log/debugf "Query (before preprocessing):\n\n%s" (u/pprint-to-str query))
-      (binding [qp.perms/*card-id* model_id]
-        (qp.writeback/execute-write-query! query)))
+                    (assoc :parameters parameters))
+          ;; Execute the query
+          result (binding [qp.perms/*card-id* model_id]
+                   (qp.writeback/execute-write-query! query))
+          current-user (get-current-user)
+          native-sql (:native dataset_query)
+          adhoc? (and native-sql (nil? model_id))] ; no model_id means adhoc native query
+      ;; Insert audit log for adhoc native queries
+      (when adhoc?
+        (jdbc/insert! db/*db* :adhoc_query_audit
+                      {:user_id      (:id current-user)
+                       :database_id  (:database_id dataset_query)
+                       :sql_text     (:query native-sql)
+                       :context      "adhoc"}))
+      ;; Return query result
+      result)
     (catch Throwable e
       (if (= (:type (u/all-ex-data e)) qp.error-type/missing-required-permissions)
         (api/throw-403 e)
