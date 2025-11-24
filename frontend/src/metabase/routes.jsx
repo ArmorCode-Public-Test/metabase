@@ -1,5 +1,4 @@
-import { IndexRedirect, IndexRoute, Redirect } from "react-router";
-import { t } from "ttag";
+import { IndexRedirect, IndexRoute, Redirect, Route } from "react-router";
 
 import App from "metabase/App.tsx";
 import getAccountRoutes from "metabase/account/routes";
@@ -16,22 +15,22 @@ import {
   BrowseSchemas,
   BrowseTables,
 } from "metabase/browse";
+import { ArchiveCollectionModal } from "metabase/collections/components/ArchiveCollectionModal";
 import CollectionLanding from "metabase/collections/components/CollectionLanding";
 import { MoveCollectionModal } from "metabase/collections/components/MoveCollectionModal";
 import { TrashCollectionLanding } from "metabase/collections/components/TrashCollectionLanding";
-import ArchiveCollectionModal from "metabase/components/ArchiveCollectionModal";
-import { Unauthorized } from "metabase/components/ErrorPages";
-import { MoveQuestionsIntoDashboardsModal } from "metabase/components/MoveQuestionsIntoDashboardsModal";
-import NotFoundFallbackPage from "metabase/containers/NotFoundFallbackPage";
-import { UnsubscribePage } from "metabase/containers/Unsubscribe";
-import { UserCollectionList } from "metabase/containers/UserCollectionList";
+import { Unauthorized } from "metabase/common/components/ErrorPages";
+import { MoveQuestionsIntoDashboardsModal } from "metabase/common/components/MoveQuestionsIntoDashboardsModal";
+import NotFoundFallbackPage from "metabase/common/components/NotFoundFallbackPage";
+import { UnsubscribePage } from "metabase/common/components/Unsubscribe";
+import { UserCollectionList } from "metabase/common/components/UserCollectionList";
 import { DashboardCopyModalConnected } from "metabase/dashboard/components/DashboardCopyModal";
 import { DashboardMoveModalConnected } from "metabase/dashboard/components/DashboardMoveModal";
 import { ArchiveDashboardModalConnected } from "metabase/dashboard/containers/ArchiveDashboardModal";
 import { AutomaticDashboardApp } from "metabase/dashboard/containers/AutomaticDashboardApp";
 import { DashboardApp } from "metabase/dashboard/containers/DashboardApp/DashboardApp";
+import { TableDetailPage } from "metabase/detail-view/pages/TableDetailPage";
 import { ModalRoute } from "metabase/hoc/ModalRoute";
-import { Route } from "metabase/hoc/Title";
 import { HomePage } from "metabase/home/components/HomePage";
 import { Onboarding } from "metabase/home/components/Onboarding";
 import { trackPageView } from "metabase/lib/analytics";
@@ -39,8 +38,10 @@ import NewModelOptions from "metabase/models/containers/NewModelOptions";
 import { getRoutes as getModelRoutes } from "metabase/models/routes";
 import {
   PLUGIN_COLLECTIONS,
+  PLUGIN_DOCUMENTS,
   PLUGIN_LANDING_PAGE,
   PLUGIN_METABOT,
+  PLUGIN_TABLE_EDITING,
 } from "metabase/plugins";
 import { QueryBuilder } from "metabase/query_builder/containers/QueryBuilder";
 import { loadCurrentUser } from "metabase/redux/user";
@@ -51,6 +52,7 @@ import FieldListContainer from "metabase/reference/databases/FieldListContainer"
 import TableDetailContainer from "metabase/reference/databases/TableDetailContainer";
 import TableListContainer from "metabase/reference/databases/TableListContainer";
 import TableQuestionsContainer from "metabase/reference/databases/TableQuestionsContainer";
+import { GlossaryContainer } from "metabase/reference/glossary/GlossaryContainer";
 import SegmentDetailContainer from "metabase/reference/segments/SegmentDetailContainer";
 import SegmentFieldDetailContainer from "metabase/reference/segments/SegmentFieldDetailContainer";
 import SegmentFieldListContainer from "metabase/reference/segments/SegmentFieldListContainer";
@@ -58,7 +60,6 @@ import SegmentListContainer from "metabase/reference/segments/SegmentListContain
 import SegmentQuestionsContainer from "metabase/reference/segments/SegmentQuestionsContainer";
 import SegmentRevisionsContainer from "metabase/reference/segments/SegmentRevisionsContainer";
 import SearchApp from "metabase/search/containers/SearchApp";
-import { EmbeddingSetup } from "metabase/setup/components/EmbeddingSetup/EmbeddingSetup";
 import { Setup } from "metabase/setup/components/Setup";
 import getCollectionTimelineRoutes from "metabase/timelines/collections/routes";
 
@@ -71,14 +72,12 @@ import {
 } from "./route-guards";
 import { createEntityIdRedirect } from "./routes-stable-id-aware";
 import { getSetting } from "./selectors/settings";
-import { getApplicationName } from "./selectors/whitelabel";
 
 export const getRoutes = (store) => {
-  const applicationName = getApplicationName(store.getState());
   const hasUserSetup = getSetting(store.getState(), "has-user-setup");
 
   return (
-    <Route title={applicationName} component={App}>
+    <Route component={App}>
       {/* SETUP */}
       <Route
         path="/setup"
@@ -95,19 +94,8 @@ export const getRoutes = (store) => {
         disableCommandPalette
       />
 
-      {/* EMBEDDING SETUP */}
-      <Route
-        path="/setup/embedding"
-        component={EmbeddingSetup}
-        onEnter={async (nextState, replace, done) => {
-          if (hasUserSetup) {
-            replace("/");
-          }
-          trackPageView(location.pathname);
-          done();
-        }}
-        disableCommandPalette
-      />
+      {/* For compatibility: use the standard setup for embedding */}
+      <Redirect from="/setup/embedding" to="/setup" />
 
       {/* APP */}
       <Route
@@ -126,8 +114,8 @@ export const getRoutes = (store) => {
         <Route path="/auth">
           <IndexRedirect to="/auth/login" />
           <Route component={IsNotAuthenticated}>
-            <Route path="login" title={t`Login`} component={Login} />
-            <Route path="login/:provider" title={t`Login`} component={Login} />
+            <Route path="login" component={Login} />
+            <Route path="login/:provider" component={Login} />
           </Route>
           <Route path="logout" component={Logout} />
           <Route path="forgot_password" component={ForgotPassword} />
@@ -153,22 +141,16 @@ export const getRoutes = (store) => {
             }}
           />
 
-          <Route
-            path="getting-started"
-            title={t`Getting Started`}
-            component={CanAccessOnboarding}
-          >
+          <Route path="getting-started" component={CanAccessOnboarding}>
             <IndexRoute component={Onboarding} />
           </Route>
 
-          <Route path="search" title={t`Search`} component={SearchApp} />
+          <Route path="search" component={SearchApp} />
           {/* Send historical /archive route to trash - can remove in v52 */}
           <Redirect from="archive" to="trash" replace />
-          <Route
-            path="trash"
-            title={t`Trash`}
-            component={TrashCollectionLanding}
-          />
+          <Route path="trash" component={TrashCollectionLanding} />
+
+          {PLUGIN_DOCUMENTS.getRoutes()}
 
           <Route
             path="collection/entity/:entity_id(**)"
@@ -217,11 +199,7 @@ export const getRoutes = (store) => {
             })}
           />
 
-          <Route
-            path="dashboard/:slug"
-            title={t`Dashboard`}
-            component={DashboardApp}
-          >
+          <Route path="dashboard/:slug" component={DashboardApp}>
             <ModalRoute
               path="move"
               modal={DashboardMoveModalConnected}
@@ -257,14 +235,11 @@ export const getRoutes = (store) => {
 
           <Route path="/model">
             <IndexRoute component={QueryBuilder} />
-            <Route
-              path="new"
-              title={t`New Model`}
-              component={NewModelOptions}
-            />
+            <Route path="new" component={NewModelOptions} />
             <Route path=":slug" component={QueryBuilder} />
             <Route path=":slug/notebook" component={QueryBuilder} />
             <Route path=":slug/query" component={QueryBuilder} />
+            <Route path=":slug/columns" component={QueryBuilder} />
             <Route path=":slug/metadata" component={QueryBuilder} />
             <Route path=":slug/metabot" component={QueryBuilder} />
             <Route path=":slug/:objectId" component={QueryBuilder} />
@@ -293,6 +268,8 @@ export const getRoutes = (store) => {
               component={BrowseTables}
             />
 
+            {PLUGIN_TABLE_EDITING.getRoutes()}
+
             {/* These two Redirects support legacy paths in v48 and earlier */}
             <Redirect from=":dbId-:slug" to="databases/:dbId-:slug" />
             <Redirect
@@ -301,12 +278,16 @@ export const getRoutes = (store) => {
             />
           </Route>
 
+          <Route path="table">
+            <Route path=":tableId/detail/:rowId" component={TableDetailPage} />
+          </Route>
+
           {/* INDIVIDUAL DASHBOARDS */}
 
           <Route path="/auto/dashboard/*" component={AutomaticDashboardApp} />
 
           {/* REFERENCE */}
-          <Route path="/reference" title={t`Data Reference`}>
+          <Route path="/reference">
             <IndexRedirect to="/reference/databases" />
             <Route path="segments" component={SegmentListContainer} />
             <Route
@@ -354,6 +335,7 @@ export const getRoutes = (store) => {
               path="databases/:databaseId/tables/:tableId/questions"
               component={TableQuestionsContainer}
             />
+            <Route path="glossary" component={GlossaryContainer} />
           </Route>
 
           {/* ACCOUNT */}

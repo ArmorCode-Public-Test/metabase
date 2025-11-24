@@ -7,14 +7,14 @@ import {
 } from "react";
 import _ from "underscore";
 
+import { BulkActionBarPortal } from "metabase/common/components/BulkActionBar/BulkActionBar";
 import { EntityPickerModal } from "metabase/common/components/EntityPicker";
+import LegacyModal from "metabase/common/components/Modal";
+import ModalContent from "metabase/common/components/ModalContent";
+import LegacySelect, { Option } from "metabase/common/components/Select";
 import { Sidesheet } from "metabase/common/components/Sidesheet";
-import LegacyModal from "metabase/components/Modal";
-import ModalContent from "metabase/components/ModalContent";
-import Toaster from "metabase/components/Toaster";
-import { UndoListOverlay } from "metabase/containers/UndoListing";
-import LegacySelect, { Option } from "metabase/core/components/Select";
-import { PaletteCard } from "metabase/palette/components/Palette";
+import Toaster from "metabase/common/components/Toaster";
+import { UndoListOverlay } from "metabase/common/components/UndoListing";
 import {
   Box,
   Button,
@@ -29,6 +29,7 @@ import {
   Select as MantineSelect,
   Tooltip as MantineTooltip,
   type ModalProps,
+  Overlay,
   Paper,
   type PaperProps,
   Stack,
@@ -36,8 +37,6 @@ import {
   Title,
 } from "metabase/ui";
 import { createMockUndo } from "metabase-types/api/mocks";
-
-import { BulkActionBarPortal } from "../../../components/BulkActionBar/BulkActionBar";
 
 const LauncherGroup = ({
   title,
@@ -349,13 +348,16 @@ export const OverlaysDemo = ({ enableNesting }: OverlaysDemoProps) => {
       ))}
       {Array.from({ length: commandPaletteCount }).map((_value, index) => {
         const modalTitleId = `command-palette-title-${index}`;
+        // This isn't a command palette per say, but this does test that "<Overlay>" works as we expect
         return (
-          <PaletteCard
+          <Overlay
             key={`command-palette-${index}`}
+            //@ts-expect-error We are doing a bad job with polymophic mantine component types, but this is fine
             onClick={() => {
               setCommandPaletteCount((c) => c - 1);
             }}
             aria-labelledby={modalTitleId}
+            component={Box}
           >
             <div onClick={(e) => e.stopPropagation()}>
               <Flex p="lg">
@@ -368,7 +370,7 @@ export const OverlaysDemo = ({ enableNesting }: OverlaysDemoProps) => {
                 </Stack>
               </Flex>
             </div>
-          </PaletteCard>
+          </Overlay>
         );
       })}
     </Stack>

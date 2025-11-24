@@ -19,7 +19,7 @@ describe("formatting > whitelabel", { tags: "@EE" }, () => {
   beforeEach(() => {
     H.restore();
     cy.signInAsAdmin();
-    H.setTokenFeatures("all");
+    H.activateToken("pro-self-hosted");
   });
 
   it("smoke UI test", () => {
@@ -45,10 +45,7 @@ describe("formatting > whitelabel", { tags: "@EE" }, () => {
         "https://www.metabase.com/docs/latest/configuring-metabase/appearance",
       )
       .and("include", "utm_");
-    cy.findByRole("link", { name: "Try for free" })
-      .should("have.attr", "href")
-      .and("include", "https://www.metabase.com/upgrade")
-      .and("include", "utm_");
+    cy.findByRole("button", { name: "Try for free" });
 
     cy.log("Upsell icon should now be visible in the sidebar link");
     cy.findAllByTestId("settings-sidebar-link")
@@ -464,7 +461,7 @@ describe("formatting > whitelabel", { tags: "@EE" }, () => {
 
           cy.log("test custom illustration");
 
-          cy.findByRole("navigation").findByText("Exit admin").click();
+          cy.findByTestId("admin-navbar").findByText("Exit admin").click();
           H.appBar().findByText("New").click();
           H.popover().findByText("Dashboard").click();
           H.modal().findByTestId("collection-picker-button").click();
@@ -497,7 +494,7 @@ describe("formatting > whitelabel", { tags: "@EE" }, () => {
           }).click();
           H.selectDropdown().findByText("No illustration").click();
 
-          cy.findByRole("navigation").findByText("Exit admin").click();
+          cy.findByTestId("admin-navbar").findByText("Exit admin").click();
           H.appBar().findByText("New").click();
           H.popover().findByText("Dashboard").click();
           H.modal().findByTestId("collection-picker-button").click();
@@ -539,17 +536,18 @@ describe("formatting > whitelabel", { tags: "@EE" }, () => {
   describe("metabot", () => {
     it("should toggle metabot visibility", () => {
       cy.visit("/");
-      cy.findAllByAltText("Metabot").should("have.length", 2);
+      cy.findAllByRole("img", { name: "Metabot" }).should("have.length", 2);
 
       cy.visit("/admin/settings/whitelabel/conceal-metabase");
       cy.findByRole("main")
-        .findByText("Show links and references to Metabase")
+        .findByText("Display welcome message on the homepage")
         .click();
 
       H.undoToast().findByText("Changes saved").should("be.visible");
 
       cy.visit("/");
-      cy.findByAltText("Metabot").should("not.exist");
+      cy.findByRole("link", { name: /home/ }).should("exist");
+      cy.findByRole("img", { name: "Metabot" }).should("not.exist");
     });
   });
 
@@ -672,7 +670,7 @@ describe("formatting > whitelabel", { tags: "@EE" }, () => {
     });
 
     it("should link to metabase help when the whitelabel feature is disabled (eg OSS)", () => {
-      H.setTokenFeatures("none");
+      H.deleteToken();
 
       cy.signInAsNormalUser();
       cy.visit("/");
@@ -722,7 +720,7 @@ describe("formatting > whitelabel", { tags: "@EE" }, () => {
     });
 
     it("should not render the widget when users does not have a valid license", () => {
-      H.setTokenFeatures("none");
+      H.activateToken("starter");
       cy.reload();
       cy.findByLabelText("Landing page custom destination").should("not.exist");
     });
@@ -735,7 +733,7 @@ describe("formatting > whitelabel", { tags: "@EE" }, () => {
         .blur();
       H.undoToast().findByText("Changes saved").should("be.visible");
 
-      cy.findByRole("navigation").findByText("Exit admin").click();
+      cy.findByTestId("admin-navbar").findByText("Exit admin").click();
       cy.url().should("include", "/test-1");
     });
 
@@ -757,7 +755,7 @@ describe("formatting > whitelabel", { tags: "@EE" }, () => {
         .findByText("This field must be a relative URL.")
         .should("be.visible");
 
-      cy.findByRole("navigation").findByText("Exit admin").click();
+      cy.findByTestId("admin-navbar").findByText("Exit admin").click();
       cy.url().should("include", "/test-2");
     });
   });

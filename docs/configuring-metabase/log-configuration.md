@@ -7,17 +7,17 @@ summary: Configure how much information Metabase displays in its logs.
 
 # Metabase logs
 
-Metabase logs quite a bit of information by default. Metabase uses [Log4j 2][https://logging.apache.org/log4j/2.x/] under the hood, so you can configure how much information Metabase logs.
+Metabase logs quite a bit of information by default. Metabase uses [Log4j 2](https://logging.apache.org/log4j/2.x/) under the hood, so you can configure how much information Metabase logs.
 
 ## View and download Metabase logs
 
-You can find Metabase logs in **Admin settings** > **Troubleshooting** > **Logs**. You can filter the logs by keywords (for example, "sync") and download them as a text file.
+You can find Metabase logs in **Admin settings** > **Tools** > **Logs**. You can filter the logs by keywords (for example, "sync") and download them as a text file.
 
 If you're running self-hosted Metabase, you'll also be able see the logs in the terminal.
 
 ## How to read Metabase logs
 
-See [How to read logs][../troubleshooting-guide/server-logs.md].
+See [How to read logs](../troubleshooting-guide/server-logs.md).
 
 ## Configuring logging Level
 
@@ -25,7 +25,7 @@ Metabase uses [log4j](https://logging.apache.org/log4j/2.x/)for logging configur
 
 ### Temporary override logging configuration
 
-To temporarily adjust the logging configuration, go to **Admin settings** > **Troubleshooting** > **Logs** and click on **Customize log levels**.
+To temporarily adjust the logging configuration, go to **Admin settings** > **Tools** > **Logs** and click on **Customize log levels**.
 
 You can select from log level presets for common troubleshooting tasks (for example, troubleshooting sync issues), or provide your own configuration as a JSON. For example, here's an override configuration that increases logging for troubleshooting linked filters:
 
@@ -80,7 +80,7 @@ java -Dlog4j.configurationFile=file:/path/to/custom/log4j2.xml -jar metabase.jar
 
 ## Configure Jetty logs
 
-You can configure Metabase's web server to provide more detail in the logs by setting the log level to `DEBUG`. Just keep in mind that Jetty's debug logs can be really chatty, which can make it difficult to find the data you're looking for.
+You can configure Metabase's web server to provide more detail in the logs by setting the log level to `DEBUG`. Just keep in mind that Jetty's debug logs can be chatty, which can make it difficult to find the data you're looking for.
 
 To get Jetty logs, add the following lines to the Log4J2 XML file in the <Loggers> node:
 

@@ -1,3 +1,4 @@
+import { useDisclosure } from "@mantine/hooks";
 import type { MouseEvent } from "react";
 import { useCallback, useMemo } from "react";
 import { t } from "ttag";
@@ -7,27 +8,23 @@ import ErrorBoundary from "metabase/ErrorBoundary";
 import {
   isExamplesCollection,
   isRootTrashCollection,
+  isSyncedCollection,
 } from "metabase/collections/utils";
-import { useHasTokenFeature, useUserSetting } from "metabase/common/hooks";
+import { Tree } from "metabase/common/components/tree";
+import { useSetting, useUserSetting } from "metabase/common/hooks";
 import { useIsAtHomepageDashboard } from "metabase/common/hooks/use-is-at-homepage-dashboard";
-import { Tree } from "metabase/components/tree";
-import { getIsNewInstance } from "metabase/home/selectors";
+import type { CollectionTreeItem } from "metabase/entities/collections";
+import {
+  getCanAccessOnboardingPage,
+  getIsNewInstance,
+} from "metabase/home/selectors";
 import { isSmallScreen } from "metabase/lib/dom";
 import { useSelector } from "metabase/lib/redux";
 import * as Urls from "metabase/lib/urls";
 import { WhatsNewNotification } from "metabase/nav/components/WhatsNewNotification";
-import { getHasOwnDatabase } from "metabase/selectors/data";
-import { getSetting } from "metabase/selectors/settings";
-import {
-  ActionIcon,
-  Flex,
-  Icon,
-  type IconName,
-  type IconProps,
-  Tooltip,
-} from "metabase/ui";
-import type Database from "metabase-lib/v1/metadata/Database";
-import type { Bookmark, Collection } from "metabase-types/api";
+import { PLUGIN_REMOTE_SYNC } from "metabase/plugins";
+import { ActionIcon, Flex, Icon, Tooltip } from "metabase/ui";
+import type { Bookmark } from "metabase-types/api";
 
 import {
   PaddedSidebarLink,
@@ -37,26 +34,23 @@ import {
   TrashSidebarSection,
 } from "../MainNavbar.styled";
 import { SidebarCollectionLink } from "../SidebarItems";
-import { AddDatabase } from "../SidebarItems/AddDatabase";
-import { DwhUploadMenu } from "../SidebarItems/DwhUpload";
-import { trackNewCollectionFromNavInitiated } from "../analytics";
+import {
+  trackAddDataModalOpened,
+  trackNewCollectionFromNavInitiated,
+} from "../analytics";
 import type { SelectedItem } from "../types";
 
+import { AddDataModal } from "./AddDataModal";
 import BookmarkList from "./BookmarkList";
 import { BrowseNavSection } from "./BrowseNavSection";
 import { GettingStartedSection } from "./GettingStartedSection";
 
-interface CollectionTreeItem extends Collection {
-  icon: IconName | IconProps;
-  children: CollectionTreeItem[];
-}
 type Props = {
   isAdmin: boolean;
   isOpen: boolean;
   bookmarks: Bookmark[];
   hasDataAccess: boolean;
   collections: CollectionTreeItem[];
-  databases: Database[];
   selectedItems: SelectedItem[];
   handleCloseNavbar: () => void;
   handleLogout: () => void;
@@ -75,7 +69,6 @@ export function MainNavbarView({
   isAdmin,
   bookmarks,
   collections,
-  databases,
   selectedItems,
   hasDataAccess,
   reorderBookmarks,
@@ -87,6 +80,12 @@ export function MainNavbarView({
   );
 
   const isAtHomepageDashboard = useIsAtHomepageDashboard();
+  const showSyncGroup = useSetting("remote-sync-type") === "read-write";
+
+  const [
+    addDataModalOpened,
+    { open: openAddDataModal, close: closeAddDataModal },
+  ] = useDisclosure(false);
 
   const {
     card: cardItem,
@@ -113,45 +112,47 @@ export function MainNavbarView({
     [isAtHomepageDashboard, onItemSelect],
   );
 
-  const [regularCollections, trashCollection, examplesCollection] =
-    useMemo(() => {
+  const [
+    regularCollections,
+    trashCollection,
+    examplesCollection,
+    syncedCollections,
+  ] = useMemo(() => {
+    const synced = collections.filter(isSyncedCollection);
+
+    const normalCollections = collections.filter((c) => {
+      const isNormalCollection =
+        !isRootTrashCollection(c) && !isExamplesCollection(c);
+      return isNormalCollection && !isSyncedCollection(c);
+    });
+
+    if (!showSyncGroup && synced.length > 0 && normalCollections.length > 0) {
+      const [root, ...rest] = normalCollections;
+      const reordered = [root, ...synced, ...rest];
+
       return [
-        collections.filter(
-          (c) => !isRootTrashCollection(c) && !isExamplesCollection(c),
-        ),
+        reordered,
         collections.find(isRootTrashCollection),
         collections.find(isExamplesCollection),
+        synced,
       ];
-    }, [collections]);
+    }
+
+    return [
+      normalCollections,
+      collections.find(isRootTrashCollection),
+      collections.find(isExamplesCollection),
+      synced,
+    ];
+  }, [collections, showSyncGroup]);
 
   const isNewInstance = useSelector(getIsNewInstance);
+  const canAccessOnboarding = useSelector(getCanAccessOnboardingPage);
+  const shouldDisplayGettingStarted = isNewInstance && canAccessOnboarding;
 
-  // Instances with DWH enabled already have uploads enabled by default.
-  // It is not possible to turn the uploads off, nor to delete the attached database.
-  const hasAttachedDWHFeature = useHasTokenFeature("attached_dwh");
-
-  const uploadDbId = useSelector(
-    (state) => getSetting(state, "uploads-settings")?.db_id,
-  );
-
-  const rootCollection = collections.find(
-    (c) => c.id === "root" || c.id === null,
-  );
-  const canCurateRootCollection = rootCollection?.can_write;
-  const canUploadToDatabase = databases
-    ?.find((db) => db.id === uploadDbId)
-    ?.canUpload();
-
-  /**
-   * the user must have:
-   *   - "write" permissions for the root collection AND
-   *   - "upload" permissions for the attached DWH
-   */
-  const canUpload = canCurateRootCollection && canUploadToDatabase;
-  const showUploadMenu = hasAttachedDWHFeature && canUpload;
-
-  const isAdditionalDatabaseAdded = getHasOwnDatabase(databases);
-  const showAddDatabaseButton = isAdmin && !isAdditionalDatabaseAdded;
+  const activeUsersCount = useSetting("active-users-count");
+  const areThereOtherUsers = (activeUsersCount ?? 0) > 1;
+  const showOtherUsersCollections = isAdmin && areThereOtherUsers;
 
   return (
     <ErrorBoundary>
@@ -166,14 +167,18 @@ export function MainNavbarView({
             >
               {t`Home`}
             </PaddedSidebarLink>
-
-            {showUploadMenu && <DwhUploadMenu />}
           </SidebarSection>
 
-          {isNewInstance && (
+          {shouldDisplayGettingStarted && (
             <SidebarSection>
               <ErrorBoundary>
-                <GettingStartedSection nonEntityItem={nonEntityItem}>
+                <GettingStartedSection
+                  nonEntityItem={nonEntityItem}
+                  onAddDataModalOpen={() => {
+                    trackAddDataModalOpened("getting-started");
+                    openAddDataModal();
+                  }}
+                >
                   {examplesCollection && (
                     <Tree
                       data={[examplesCollection]}
@@ -204,6 +209,14 @@ export function MainNavbarView({
             </SidebarSection>
           )}
 
+          {showSyncGroup && (
+            <PLUGIN_REMOTE_SYNC.SyncedCollectionsSidebarSection
+              onItemSelect={onItemSelect}
+              selectedId={collectionItem?.id}
+              syncedCollections={syncedCollections}
+            />
+          )}
+
           <SidebarSection>
             <ErrorBoundary>
               <CollectionSectionHeading
@@ -218,7 +231,7 @@ export function MainNavbarView({
                 role="tree"
                 aria-label="collection-tree"
               />
-              {isAdmin && (
+              {showOtherUsersCollections && (
                 <PaddedSidebarLink
                   icon="group"
                   url={OTHER_USERS_COLLECTIONS_URL}
@@ -235,6 +248,7 @@ export function MainNavbarView({
                 nonEntityItem={nonEntityItem}
                 onItemSelect={onItemSelect}
                 hasDataAccess={hasDataAccess}
+                onAddDataModalOpen={openAddDataModal}
               />
             </ErrorBoundary>
           </SidebarSection>
@@ -252,16 +266,13 @@ export function MainNavbarView({
               </ErrorBoundary>
             </TrashSidebarSection>
           )}
-          {showAddDatabaseButton && (
-            <SidebarSection>
-              <ErrorBoundary>
-                <AddDatabase />
-              </ErrorBoundary>
-            </SidebarSection>
-          )}
         </div>
-        <WhatsNewNotification />
+        <div>
+          <WhatsNewNotification />
+        </div>
       </SidebarContentRoot>
+
+      <AddDataModal opened={addDataModalOpened} onClose={closeAddDataModal} />
     </ErrorBoundary>
   );
 }

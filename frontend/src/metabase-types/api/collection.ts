@@ -16,7 +16,8 @@ import type { SortingOptions } from "./sorting";
 import type { TableId } from "./table";
 import type { UserId } from "./user";
 
-export type RegularCollectionId = number;
+// Collection ID can be either a numeric or entity id
+export type RegularCollectionId = number | string;
 
 export type CollectionId =
   | RegularCollectionId
@@ -29,7 +30,11 @@ export type CollectionContentModel = "card" | "dataset";
 
 export type CollectionAuthorityLevel = "official" | null;
 
-export type CollectionType = "instance-analytics" | "trash" | null;
+export type CollectionType =
+  | "instance-analytics"
+  | "trash"
+  | "remote-synced"
+  | null;
 
 export type LastEditInfo = {
   email: string;
@@ -49,7 +54,7 @@ export type CollectionAuthorityLevelConfig = {
 
 export type CollectionInstanceAnaltyicsConfig = {
   type: CollectionType;
-  name: string;
+  name?: string;
   icon: IconName;
   color?: string;
   tooltips?: Record<string, string>;
@@ -68,7 +73,7 @@ export interface Collection {
   archived: boolean;
   children?: Collection[];
   authority_level?: CollectionAuthorityLevel;
-  type?: "instance-analytics" | "trash" | null;
+  type?: CollectionType;
 
   parent_id?: CollectionId | null;
   personal_owner_id?: UserId;
@@ -81,6 +86,8 @@ export interface Collection {
 
   here?: CollectionContentModel[];
   below?: CollectionContentModel[];
+
+  git_sync_enabled?: boolean;
 
   // Assigned on FE
   originalName?: string;
@@ -95,6 +102,7 @@ export const COLLECTION_ITEM_MODELS = [
   "snippet",
   "collection",
   "indexed-entity",
+  "document",
 ] as const;
 export type CollectionItemModel = (typeof COLLECTION_ITEM_MODELS)[number];
 
@@ -154,6 +162,7 @@ export interface CollectionListQuery {
 export type getCollectionRequest = {
   id: CollectionId;
   namespace?: "snippets";
+  ignore_error?: boolean;
 };
 
 export type ListCollectionItemsSortColumn =
@@ -168,6 +177,7 @@ export type ListCollectionItemsRequest = {
   archived?: boolean;
   pinned_state?: "all" | "is_pinned" | "is_not_pinned";
   namespace?: "snippets";
+  collection_type?: CollectionType;
 } & PaginationRequest &
   Partial<SortingOptions<ListCollectionItemsSortColumn>>;
 
@@ -183,6 +193,7 @@ export interface UpdateCollectionRequest {
   archived?: boolean;
   parent_id?: RegularCollectionId | null;
   authority_level?: CollectionAuthorityLevel;
+  type?: CollectionType;
 }
 
 export interface CreateCollectionRequest {
@@ -198,6 +209,7 @@ export interface ListCollectionsRequest {
   namespace?: string;
   "personal-only"?: boolean;
   "exclude-other-user-collections"?: boolean;
+  collection_type?: CollectionType;
 }
 export interface ListCollectionsTreeRequest {
   "exclude-archived"?: boolean;
@@ -205,6 +217,7 @@ export interface ListCollectionsTreeRequest {
   namespace?: string;
   shallow?: boolean;
   "collection-id"?: RegularCollectionId | null;
+  collection_type?: CollectionType;
 }
 
 export interface DeleteCollectionRequest {

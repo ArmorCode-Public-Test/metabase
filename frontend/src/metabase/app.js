@@ -1,7 +1,6 @@
 import "@mantine/core/styles.css";
 import "@mantine/dates/styles.css";
-
-import "regenerator-runtime/runtime";
+import "@xyflow/react/dist/style.css";
 
 // This is conditionally aliased in the webpack config.
 // If EE isn't enabled, it loads an empty file.
@@ -25,18 +24,18 @@ import "metabase/plugins/builtin";
 
 // This is conditionally aliased in the webpack config.
 // If EE isn't enabled, it loads an empty file.
-import "ee-plugins";
 
 // Set nonce for mantine v6 deps
 import "metabase/lib/csp";
 
 import { createHistory } from "history";
 import { DragDropContextProvider } from "react-dnd";
-import HTML5Backend from "react-dnd-html5-backend";
 import { createRoot } from "react-dom/client";
 import { Router, useRouterHistory } from "react-router";
 import { syncHistoryWithStore } from "react-router-redux";
 
+import { initializePlugins } from "ee-plugins";
+import { ModifiedBackend } from "metabase/common/components/dnd/ModifiedBackend";
 import { createTracker } from "metabase/lib/analytics";
 import api from "metabase/lib/api";
 import { initializeEmbedding } from "metabase/lib/embed";
@@ -62,6 +61,7 @@ const browserHistory = useRouterHistory(createHistory)({
   basename: BASENAME,
 });
 
+initializePlugins();
 function _init(reducers, getRoutes, callback) {
   const store = getStore(reducers, browserHistory);
   const routes = getRoutes(store);
@@ -77,7 +77,7 @@ function _init(reducers, getRoutes, callback) {
   root.render(
     <MetabaseReduxProvider store={store}>
       <EmotionCacheProvider>
-        <DragDropContextProvider backend={HTML5Backend} context={{ window }}>
+        <DragDropContextProvider backend={ModifiedBackend} context={{ window }}>
           <ThemeProvider>
             <GlobalStyles />
             <MetabotProvider>

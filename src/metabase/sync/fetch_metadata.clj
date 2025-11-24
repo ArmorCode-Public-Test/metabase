@@ -19,14 +19,15 @@
   `(try
      ~@body
      (catch Throwable e#
-       (log/errorf e# "Error while fetching metdata with '%s'" ~function-name)
+       (log/errorf e# "Error while fetching metadata with '%s'" ~function-name)
        (throw e#))))
 
 (mu/defn db-metadata :- i/DatabaseMetadata
   "Get basic Metadata about a `database` and its Tables. Doesn't include information about the Fields."
   [database :- i/DatabaseInstance]
   (log-if-error "db-metadata"
-    (driver/describe-database (driver.u/database->driver database) database)))
+    (let [driver (driver.u/database->driver database)]
+      (driver/describe-database driver database))))
 
 (defn include-nested-fields-for-table
   "Add nested-field-columns for table to set of fields."

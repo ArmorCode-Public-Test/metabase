@@ -1,7 +1,7 @@
+import cx from "classnames";
 import {
   type ChangeEvent,
   type Dispatch,
-  type PropsWithChildren,
   type ReactNode,
   type SetStateAction,
   useCallback,
@@ -11,11 +11,13 @@ import {
 } from "react";
 import { c, msgid, ngettext, t } from "ttag";
 
-import { SettingHeader } from "metabase/admin/settings/components/SettingHeader";
-import { useDocsUrl } from "metabase/common/hooks";
-import { UploadInput } from "metabase/components/upload";
-import ExternalLink from "metabase/core/components/ExternalLink";
-import Markdown from "metabase/core/components/Markdown";
+import ErrorBoundary from "metabase/ErrorBoundary";
+import { SettingsSection } from "metabase/admin/components/SettingsSection";
+import ExternalLink from "metabase/common/components/ExternalLink";
+import Markdown from "metabase/common/components/Markdown";
+import { UploadInput } from "metabase/common/components/upload";
+import { useConfirmation, useDocsUrl, useToast } from "metabase/common/hooks";
+import CS from "metabase/css/core/index.css";
 import {
   Form,
   FormProvider,
@@ -31,7 +33,7 @@ import {
   Loader,
   Stack,
   Text,
-  type TextProps,
+  Title,
 } from "metabase/ui";
 import { useUploadContentTranslationDictionaryMutation } from "metabase-enterprise/api";
 
@@ -60,7 +62,7 @@ export const ContentTranslationConfiguration = () => {
     string | null
   >();
   const [isDownloadInProgress, setIsDownloadInProgress] = useState(false);
-  const [errorMessages, setErrorMessages] = useState<string[]>([]);
+  const [uploadErrorMessages, setUploadErrorMessages] = useState<string[]>([]);
   const [showDownloadingIndicator, setShowDownloadingIndicator] =
     useState(false);
 
@@ -68,6 +70,8 @@ export const ContentTranslationConfiguration = () => {
     setDownloadErrorMessage(errorMessage);
     setIsDownloadInProgress(false);
   }, []);
+
+  const [sendToast] = useToast();
 
   const triggerDownload = async () => {
     setDownloadErrorMessage(null);
@@ -86,6 +90,7 @@ export const ContentTranslationConfiguration = () => {
       const filename = "metabase-content-translations.csv";
       openSaveDialog(filename, blob);
       setIsDownloadInProgress(false);
+      await sendToast({ message: t`Dictionary downloaded`, icon: "download" });
     } catch {
       showDownloadError(t`An error occurred`);
     }
@@ -110,93 +115,94 @@ export const ContentTranslationConfiguration = () => {
     [isDownloadInProgress],
   );
 
+  // eslint-disable-next-line no-literal-metabase-strings -- This string only shows for admins.
+  const uploadDescription = t`Upload a translation dictionary to translate strings both in Metabase content (like dashboard titles) and in the data itself (like column names and values). The dictionary must be a CSV with these columns: **Locale Code**, **String**, **Translation**.`;
+
   return (
-    <Stack
-      gap="sm"
-      maw="38rem"
-      aria-labelledby="content-translation-header"
-      data-testid="content-translation-configuration"
-    >
-      <SettingHeader
-        id="content-translation-header"
-        title={t`Upload a dictionary to translate user-generated content`}
-        description={
-          <>
-            <Stack gap="sm">
-              <DescriptionText>{t`You can upload a translation dictionary to handle user-generated strings, like dashboard names.`}</DescriptionText>
-              <DescriptionText>{t`The dictionary must be a CSV with these columns:`}</DescriptionText>
-              <List ms="sm" c="text-medium">
-                <List.Item c="inherit">{t`Locale Code`}</List.Item>
-                <List.Item c="inherit">{t`String`}</List.Item>
-                <List.Item c="inherit">{t`Translation`}</List.Item>
-              </List>
-              <DescriptionText>{t`Don't put any sensitive data in the dictionary, since anyone can see the dictionary—including viewers of public links.`}</DescriptionText>
-              <DescriptionText>{t`Uploading a new dictionary will replace the existing dictionary.`}</DescriptionText>
-              <Markdown
-                components={{
-                  em: ({ children }: { children: ReactNode }) => (
-                    <ExternalLink href={availableLocalesDocsUrl}>
-                      {children}
-                    </ExternalLink>
-                  ),
-                }}
-              >
-                {t`See a list of *supported locales*.`}
-              </Markdown>
-            </Stack>
-          </>
-        }
-      />
-      <Group>
-        <Button
-          onClick={triggerDownload}
-          leftSection={
-            showDownloadingIndicator ? null : <Icon name="download" c="brand" />
-          }
-          miw="calc(50% - 0.5rem)"
-          style={{ flexGrow: 1 }}
-          disabled={isDownloadInProgress}
-        >
-          {showDownloadingIndicator ? (
-            <Loader size="sm" />
-          ) : (
-            t`Download translation dictionary`
+    <ErrorBoundary>
+      <SettingsSection data-testid="content-translation-configuration">
+        <Stack>
+          <Stack gap="sm">
+            <Title
+              fz="lg"
+              lh="xs"
+              fw={600}
+            >{t`Translate embedded dashboards and questions`}</Title>
+
+            <Markdown c="text-secondary">{uploadDescription}</Markdown>
+
+            <Markdown
+              c="text-secondary"
+              components={{
+                em: ({ children }: { children: ReactNode }) => (
+                  <ExternalLink
+                    href={availableLocalesDocsUrl}
+                    className={cx(CS.textBold, CS.link)}
+                  >
+                    {children}
+                  </ExternalLink>
+                ),
+              }}
+            >
+              {t`Don't put any sensitive data in the dictionary, since anyone can see the dictionary—including viewers of public links. Uploading a new dictionary will replace the existing dictionary. See a list of _supported locales_.`}
+            </Markdown>
+          </Stack>
+
+          <Group>
+            <Button
+              onClick={triggerDownload}
+              leftSection={
+                showDownloadingIndicator ? null : (
+                  <Icon name="download" c="brand" />
+                )
+              }
+              miw="calc(50% - 0.5rem)"
+              fw="normal"
+              style={{ flexGrow: 1 }}
+              disabled={isDownloadInProgress}
+            >
+              {showDownloadingIndicator ? (
+                <Loader size="sm" />
+              ) : (
+                t`Get translation dictionary template`
+              )}
+            </Button>
+            <FormProvider
+              // We're only using Formik to make the appearance of the submit button
+              // depend on the form's status. We're not using Formik's other features
+              // here.
+              initialValues={{}}
+              onSubmit={() => {}}
+            >
+              <UploadForm setErrorMessages={setUploadErrorMessages} />
+            </FormProvider>
+          </Group>
+          {downloadErrorMessage && (
+            <Text role="alert" c="danger">
+              {downloadErrorMessage}
+            </Text>
           )}
-        </Button>
-        <FormProvider
-          // We're only using Formik to make the appearance of the submit button
-          // depend on the form's status. We're not using Formik's other features
-          // here.
-          initialValues={{}}
-          onSubmit={() => {}}
-        >
-          <UploadForm setErrorMessages={setErrorMessages} />
-        </FormProvider>
-      </Group>
-      {downloadErrorMessage && (
-        <Text role="alert" c="danger">
-          {downloadErrorMessage}
-        </Text>
-      )}
-      {!!errorMessages.length && (
-        <Stack gap="xs">
-          <Text role="alert" c="error">
-            {ngettext(
-              msgid`We couldn't upload the file due to this error:`,
-              `We couldn't upload the file due to these errors:`,
-              errorMessages.length,
-            )}
-          </Text>
-          <List withPadding>
-            {errorMessages.map((errorMessage) => (
-              <List.Item key={errorMessage} role="alert" c="danger">
-                {errorMessage}
-              </List.Item>
-            ))}
-          </List>
+          {!!uploadErrorMessages.length && (
+            <Stack gap="xs">
+              <Text role="alert" c="error">
+                {ngettext(
+                  msgid`We couldn't upload the file due to this error:`,
+                  `We couldn't upload the file due to these errors:`,
+                  uploadErrorMessages.length,
+                )}
+              </Text>
+              <List withPadding>
+                {uploadErrorMessages.map((errorMessage) => (
+                  <List.Item key={errorMessage} role="alert" c="danger">
+                    {errorMessage}
+                  </List.Item>
+                ))}
+              </List>
+            </Stack>
+          )}
         </Stack>
-      )}
-    </Stack>
+      </SettingsSection>
+    </ErrorBoundary>
   );
 };
 
@@ -213,17 +219,36 @@ const UploadForm = ({
       const file = event.target.files[0];
 
       if (file.size > maxContentDictionarySizeInBytes) {
-        setErrorMessages([
+        setStatus("rejected");
+        updateUploadErrorMessages([
           c("{0} is a number")
             .t`The file is larger than ${approxMaxContentDictionarySizeInMB} MB`,
         ]);
-        setStatus("rejected");
+        resetInput();
         return;
       }
 
       await uploadFile(file);
       resetInput();
     }
+  };
+
+  const proceedWithUploadAfterConfirmation = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    askConfirmation({
+      title: t`Upload new dictionary?`,
+      message: t`This will replace the existing dictionary.`,
+      confirmButtonText: t`Replace existing dictionary`,
+      onConfirm: () => {
+        handleFileChange(event);
+      },
+      onCancel: () => {
+        // Reset the input so that choosing the same file again triggers the
+        // input's onChange handler
+        resetInput();
+      },
+    });
   };
 
   const resetInput = () => {
@@ -235,26 +260,52 @@ const UploadForm = ({
 
   const { status, setStatus } = useFormContext();
 
+  const [sendToast] = useToast();
+
+  const updateUploadErrorMessages = useCallback(
+    (errorMessages: string[]) => {
+      setErrorMessages(errorMessages);
+      if (errorMessages.length) {
+        return sendToast({
+          message: t`Could not upload dictionary`,
+          icon: "warning",
+        });
+      }
+    },
+    [setErrorMessages, sendToast],
+  );
+
   const uploadFile = useCallback(
     async (file: File) => {
       if (!file) {
         console.error("No file selected");
         return;
       }
-      setErrorMessages([]);
+      updateUploadErrorMessages([]);
       setStatus("pending");
       await uploadContentTranslationDictionary({ file })
         .unwrap()
-        .then(() => {
+        .then(async () => {
           setStatus("fulfilled");
+          await sendToast({ message: t`Dictionary uploaded` });
         })
-        .catch((e) => {
-          setErrorMessages(e.data.errors ?? [t`Unknown error encountered`]);
+        .catch(async (e) => {
+          await updateUploadErrorMessages(
+            e.data?.errors ?? [t`Unknown error encountered`],
+          );
           setStatus("rejected");
         });
     },
-    [uploadContentTranslationDictionary, setErrorMessages, setStatus],
+    [
+      uploadContentTranslationDictionary,
+      updateUploadErrorMessages,
+      setStatus,
+      sendToast,
+    ],
   );
+
+  const { show: askConfirmation, modalContent: confirmationModal } =
+    useConfirmation();
 
   const triggerUpload = () => {
     const input = inputRef.current;
@@ -275,6 +326,7 @@ const UploadForm = ({
       miw="calc(50% - 1rem)"
       display="flex"
     >
+      {confirmationModal}
       <FormSubmitButton
         flex="1 1 0"
         w="auto"
@@ -282,7 +334,10 @@ const UploadForm = ({
         label={
           <Group gap="sm">
             <Icon name="upload" c="brand" />
-            <Text c="inherit">{t`Upload translation dictionary`}</Text>
+            <Text
+              c="inherit"
+              fw="normal"
+            >{t`Upload edited translation dictionary`}</Text>
           </Group>
         }
         successLabel={
@@ -312,11 +367,8 @@ const UploadForm = ({
         id="content-translation-dictionary-upload-input"
         ref={inputRef}
         accept="text/csv"
-        onChange={handleFileChange}
+        onChange={proceedWithUploadAfterConfirmation}
       />
     </Form>
   );
 };
-const DescriptionText = (props: PropsWithChildren<TextProps>) => (
-  <Text c="inherit" lh="1.5" {...props} />
-);

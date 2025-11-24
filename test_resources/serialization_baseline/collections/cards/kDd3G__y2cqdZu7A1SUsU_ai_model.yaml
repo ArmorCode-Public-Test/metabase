@@ -13,6 +13,7 @@ database_id: test-data (h2)
 table_id: null
 enable_embedding: false
 embedding_params: null
+embedding_type: null
 made_public_by_id: null
 public_uuid: null
 parameters: []
@@ -31,3 +32,4 @@ dashboard_id: null
 metabase_version: v1.52.2-SNAPSHOT (f309296)
 source_card_id: null
 type: model
+document_id: null

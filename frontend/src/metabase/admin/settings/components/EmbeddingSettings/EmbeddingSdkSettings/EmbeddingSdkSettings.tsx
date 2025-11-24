@@ -1,17 +1,30 @@
+import cx from "classnames";
 import { match } from "ts-pattern";
-import { jt, t } from "ttag";
+import { c, jt, t } from "ttag";
 
+import {
+  RelatedSettingsSection,
+  getModularEmbeddingRelatedSettingItems,
+} from "metabase/admin/components/RelatedSettingsSection";
+import { SettingsPageWrapper } from "metabase/admin/components/SettingsSection";
+import { UpsellDevInstances } from "metabase/admin/upsells";
+import { UpsellEmbeddingButton } from "metabase/admin/upsells/UpsellEmbeddingButton";
+import { UpsellSdkLink } from "metabase/admin/upsells/UpsellSdkLink";
+import ExternalLink from "metabase/common/components/ExternalLink";
 import { useDocsUrl, useSetting, useUrlWithUtm } from "metabase/common/hooks";
-import ExternalLink from "metabase/core/components/ExternalLink";
-import { useSelector } from "metabase/lib/redux";
-import { PLUGIN_EMBEDDING_SDK } from "metabase/plugins";
-import { getLearnUrl, getUpgradeUrl } from "metabase/selectors/settings";
-import { Alert, Box, Button, Icon, Text } from "metabase/ui";
+import CS from "metabase/css/core/index.css";
+import { useDispatch } from "metabase/lib/redux";
+import { isEEBuild } from "metabase/lib/utils";
+import {
+  PLUGIN_EMBEDDING_IFRAME_SDK_SETUP,
+  PLUGIN_EMBEDDING_SDK,
+} from "metabase/plugins";
+import { setOpenModalWithProps } from "metabase/redux/ui";
+import { Box, Button, Group, HoverCard, Icon, Stack, Text } from "metabase/ui";
 
-import { SettingHeader } from "../../SettingHeader";
-import { SettingsPageWrapper, SettingsSection } from "../../SettingsSection";
 import { AdminSettingInput } from "../../widgets/AdminSettingInput";
-import { EmbeddingToggle } from "../EmbeddingToggle";
+import S from "../EmbeddingSettings.module.css";
+import { EmbeddingSettingsCard } from "../EmbeddingSettingsCard";
 
 const utmTags = {
   utm_source: "product",
@@ -21,166 +34,228 @@ const utmTags = {
 };
 
 export function EmbeddingSdkSettings() {
-  const isEE = PLUGIN_EMBEDDING_SDK.isEnabled();
-  const isEmbeddingSdkEnabled = useSetting("enable-embedding-sdk");
+  const dispatch = useDispatch();
+  const isEE = isEEBuild();
 
-  const canEditSdkOrigins = isEE && isEmbeddingSdkEnabled;
+  const isReactSdkEnabled = useSetting("enable-embedding-sdk");
+  const isReactSdkFeatureAvailable = PLUGIN_EMBEDDING_SDK.isEnabled();
+  const isLocalhostCorsDisabled = useSetting("disable-cors-on-localhost");
+
+  const isSimpleEmbedEnabled = useSetting("enable-embedding-simple");
+  const isSimpleEmbedFeatureAvailable =
+    PLUGIN_EMBEDDING_IFRAME_SDK_SETUP.isFeatureEnabled();
+
+  const isEmbeddingAvailable =
+    isReactSdkFeatureAvailable || isSimpleEmbedFeatureAvailable;
+
+  const canEditSdkOrigins =
+    (isReactSdkFeatureAvailable && isReactSdkEnabled) ||
+    (isSimpleEmbedFeatureAvailable && isSimpleEmbedEnabled);
 
   const isHosted = useSetting("is-hosted?");
-
-  const upgradeUrl = useSelector((state) =>
-    getUpgradeUrl(state, {
-      utm_campaign: "embedding-sdk",
-      utm_content: "embedding-sdk-admin",
-    }),
-  );
 
   const { url: switchMetabaseBinariesUrl } = useDocsUrl(
     "paid-features/activating-the-enterprise-edition",
     { utm: utmTags },
   );
 
-  const implementJwtUrl = useUrlWithUtm(
-    getLearnUrl("metabase-basics/embedding/securing-embeds"),
-    utmTags,
-  );
+  const implementJwtUrl = useDocsUrl("embedding/sdk/authentication", {
+    utm: utmTags,
+  });
 
-  const quickStartUrl = useUrlWithUtm(
+  const sdkQuickStartUrl = useUrlWithUtm(
     "https://metaba.se/sdk-quick-start",
     utmTags,
   );
-  const documentationUrl = useUrlWithUtm("https://metaba.se/sdk-docs", utmTags);
+
+  const sdkDocumentationUrl = useUrlWithUtm(
+    "https://metaba.se/sdk-docs",
+    utmTags,
+  );
+
+  // The quickstart is part of the documentation page, unlike the SDK, so we only need a single docs link.
+  const embedJsDocumentationUrl = useDocsUrl("embedding/embedded-analytics-js");
+
+  const SwitchBinariesLink = (
+    <ExternalLink
+      key="switch-metabase-binaries"
+      href={switchMetabaseBinariesUrl}
+      className={cx(CS.link, CS.textBold)}
+    >
+      {t`switch Metabase binaries`}
+    </ExternalLink>
+  );
+
+  const ImplementJwtLink = (
+    <ExternalLink
+      key="implement-jwt"
+      href={implementJwtUrl.url}
+      className={cx(CS.link, CS.textBold)}
+    >
+      {t`implement JWT or SAML SSO`}
+    </ExternalLink>
+  );
 
   const apiKeyBannerText = match({
-    isOSS: !isEE && !isHosted,
-    isCloudStarter: !isEE && isHosted,
-    isEE,
+    needsToSwitchBinaries: !isEE,
+    needsToUpgrade: !isEmbeddingAvailable,
+    needsToImplementJwt: isEmbeddingAvailable,
   })
     .with(
-      { isOSS: true },
+      { needsToSwitchBinaries: true },
       () =>
-        jt`You can test Embedded analytics SDK on localhost quickly by using API keys. To use the SDK on other sites, ${(
-          <ExternalLink
-            key="switch-metabase-binaries"
-            href={switchMetabaseBinariesUrl}
-          >
-            {t`switch Metabase binaries`}
-          </ExternalLink>
-        )}, ${(
-          <ExternalLink key="upgrade-url" href={upgradeUrl}>
-            {t`upgrade to Metabase Pro`}
-          </ExternalLink>
-        )} and ${(
-          <ExternalLink key="implement-jwt" href={implementJwtUrl}>
-            {t`implement JWT SSO`}
-          </ExternalLink>
-        )}.`,
+        c(
+          "{0} is the link to switch binaries. {1} is the link to upsell the SDK. {2} is the link to implement JWT or SAML authentication.",
+        )
+          .jt`You can test Embedded analytics SDK on localhost quickly by using API keys. To use the SDK on other sites, ${SwitchBinariesLink}, ${(<UpsellSdkLink key="upsell-sdk-link" />)} and ${ImplementJwtLink}.`,
     )
     .with(
-      { isCloudStarter: true },
+      { needsToUpgrade: true },
       () =>
-        jt`You can test Embedded analytics SDK on localhost quickly by using API keys. To use the SDK on other sites, ${(
-          <ExternalLink key="upgrade-url" href={upgradeUrl}>
-            {t`upgrade to Metabase Pro`}
-          </ExternalLink>
-        )} and ${(
-          <ExternalLink key="implement-jwt" href={implementJwtUrl}>
-            {t`implement JWT SSO`}
-          </ExternalLink>
-        )}.`,
+        c(
+          "{0} is the link to upsell the SDK. {1} is the link to implement JWT or SAML authentication.",
+        )
+          .jt`You can test Embedded analytics SDK on localhost quickly by using API keys. To use the SDK on other sites, ${(<UpsellSdkLink key="upsell-sdk-link" />)} and ${ImplementJwtLink}.`,
     )
     .with(
-      { isEE: true },
+      { needsToImplementJwt: true },
       () =>
-        jt`You can test Embedded analytics SDK on localhost quickly by using API keys. To use the SDK on other sites, ${(
-          <ExternalLink key="implement-jwt" href={implementJwtUrl}>
-            {t`implement JWT SSO`}
-          </ExternalLink>
-        )}.`,
+        c("{0} is the link to implement JWT or SAML authentication.")
+          .jt`You can test Embedded analytics SDK on localhost quickly by using API keys. To use the SDK on other sites, ${ImplementJwtLink}.`,
     )
     .otherwise(() => null);
 
-  return (
-    <SettingsPageWrapper title={t`Embedding SDK`}>
-      <SettingsSection>
-        <EmbeddingToggle
-          label={t`Enable Embedded analytics SDK for React`}
-          settingKey="enable-embedding-sdk"
-        />
+  const corsHintText = isLocalhostCorsDisabled
+    ? t`Separate values with a space. Localhost is not allowed. Changes will take effect within one minute.`
+    : t`Separate values with a space. Localhost is automatically included. Changes will take effect within one minute.`;
 
-        <Alert
-          data-testid="sdk-settings-alert-info"
-          icon={
-            <Icon color="var(--mb-color-text-secondary)" name="info_filled" />
-          }
-          bg="var(--mb-color-background-info)"
-          style={{
-            borderColor: "var(--mb-color-border)",
-          }}
-          variant="outline"
-          px="lg"
-          py="md"
-          maw={620}
-        >
-          <Text size="sm">{apiKeyBannerText}</Text>
-        </Alert>
-        <Box>
-          <SettingHeader
-            id="get-started"
-            title={isEE ? t`Get started` : t`Try Embedded analytics SDK`}
-            description={
-              isEE ? "" : t`Use the SDK with API keys for development.`
-            }
-          />
-          <Button
-            variant="outline"
-            component={ExternalLink}
-            href={quickStartUrl}
-          >{t`Check out the Quickstart`}</Button>
-        </Box>
-        <Box>
-          <AdminSettingInput
-            name="embedding-app-origins-sdk"
-            title={t`Cross-Origin Resource Sharing (CORS)`}
-            placeholder="https://*.example.com"
-            description={
-              isEE
-                ? t`Enter the origins for the websites or apps where you want to allow SDK embedding, separated by a space. Localhost is automatically included. Changes will take effect within one minute.`
-                : jt`Try out the SDK on localhost. To enable other sites, ${(
-                    <ExternalLink key="upgrade-url" href={upgradeUrl}>
-                      {t`upgrade to Metabase Pro`}
-                    </ExternalLink>
-                  )} and Enter the origins for the websites or apps where you want to allow SDK embedding.`
-            }
-            inputType="text"
-            disabled={!canEditSdkOrigins}
-          />
-        </Box>
-        {isEE && isHosted && (
-          <Box>
-            <SettingHeader
-              id="version-pinning"
-              title={t`Version pinning`}
-              description={t`Metabase Cloud instances are automatically upgraded to new releases. SDK packages are strictly compatible with specific version of Metabase. You can request to pin your Metabase to a major version and upgrade your Metabase and SDK dependency in a coordinated fashion.`}
+  return (
+    <SettingsPageWrapper title={t`Modular embedding`}>
+      <EmbeddingSettingsCard
+        title={t`Embedded Analytics JS`}
+        description={t`An easy-to-use library that lets you embed Metabase entities like charts, dashboards, or even the query builder into your own application using customizable components.`}
+        settingKey="enable-embedding-simple"
+        isFeatureEnabled={isSimpleEmbedFeatureAvailable}
+        links={[
+          {
+            icon: "reference",
+            title: t`Documentation`,
+            href: embedJsDocumentationUrl?.url,
+          },
+        ]}
+        rightSideContent={
+          !isSimpleEmbedFeatureAvailable ? (
+            <UpsellEmbeddingButton
+              url="https://www.metabase.com/product/embedded-analytics"
+              campaign="embedded-analytics-js"
+              location="embedding-page"
+              size="default"
             />
+          ) : undefined
+        }
+        actionButton={
+          isSimpleEmbedFeatureAvailable && (
             <Button
-              size="compact-md"
-              variant="outline"
-              leftSection={<Icon size={12} name="mail" aria-hidden />}
-              component={ExternalLink}
-              fz="0.75rem"
-              href="mailto:help@metabase.com"
-            >{t`Request version pinning`}</Button>
-          </Box>
-        )}
-        <Text data-testid="sdk-documentation">
-          {jt`Check out the ${(
-            <ExternalLink key="sdk-doc" href={documentationUrl}>
-              {t`documentation`}
+              variant="brand"
+              size="sm"
+              onClick={() => {
+                dispatch(setOpenModalWithProps({ id: "embed" }));
+              }}
+            >
+              {t`New embed`}
+            </Button>
+          )
+        }
+        testId="sdk-setting-card"
+      />
+
+      <EmbeddingSettingsCard
+        title={t`SDK for React`}
+        description={t`Embed the full power of Metabase into your application to build a custom analytics experience and programmatically manage dashboards and data.`}
+        settingKey="enable-embedding-sdk"
+        links={[
+          {
+            icon: "bolt",
+            title: t`Quick start`,
+            href: sdkQuickStartUrl,
+          },
+          {
+            icon: "reference",
+            title: t`Documentation`,
+            href: sdkDocumentationUrl,
+          },
+        ]}
+        alertInfoText={apiKeyBannerText}
+        testId="sdk-setting-card"
+      />
+
+      <Box py="lg" px="xl" className={S.SectionCard}>
+        <AdminSettingInput
+          title={t`Cross-Origin Resource Sharing (CORS)`}
+          description={
+            <Group align="center" gap="sm">
+              <Text c="text-medium" fz="md">
+                {isEmbeddingAvailable
+                  ? t`Enter the origins for the websites or apps where you want to allow SDK embedding.`
+                  : jt`Try out the SDK on localhost. To enable other sites, ${(<UpsellSdkLink key="upsell-sdk-link" />)} and enter the origins for the websites or apps where you want to allow SDK and Embedded Analytics JS.`}
+              </Text>
+
+              {isEmbeddingAvailable && (
+                <HoverCard position="bottom">
+                  <HoverCard.Target>
+                    <Icon name="info" c="text-medium" cursor="pointer" />
+                  </HoverCard.Target>
+
+                  <HoverCard.Dropdown>
+                    <Box p="md" w={270} bg="white">
+                      <Text lh="lg" c="text-medium">
+                        {corsHintText}
+                      </Text>
+                    </Box>
+                  </HoverCard.Dropdown>
+                </HoverCard>
+              )}
+            </Group>
+          }
+          name="embedding-app-origins-sdk"
+          placeholder="https://*.example.com"
+          inputType="text"
+          disabled={!canEditSdkOrigins}
+        />
+      </Box>
+
+      {isEmbeddingAvailable && isHosted && (
+        <Box py="lg" px="xl" className={S.SectionCard}>
+          <Stack gap="xs">
+            <Text
+              htmlFor="version-pinning"
+              component="label"
+              c="text-primary"
+              fw="bold"
+              fz="lg"
+            >
+              {t`Version pinning`}
+            </Text>
+
+            <Text c="text-secondary" lh="lg" mb="sm">
+              {t`Metabase Cloud instances are automatically upgraded to new releases. SDK packages are strictly compatible with specific version of Metabase. You can request to pin your Metabase to a major version and upgrade your Metabase and SDK dependency in a coordinated fashion.`}
+            </Text>
+
+            <ExternalLink href="mailto:help@metabase.com">
+              <Group gap="sm" fw="bold" w="fit-content">
+                <Icon name="mail" size={14} aria-hidden />
+                <span>{t`Request version pinning`}</span>
+              </Group>
             </ExternalLink>
-          )} for more.`}
-        </Text>
-      </SettingsSection>
+          </Stack>
+        </Box>
+      )}
+
+      <RelatedSettingsSection
+        items={getModularEmbeddingRelatedSettingItems()}
+      />
+
+      <UpsellDevInstances location="embedding-page" />
     </SettingsPageWrapper>
   );
 }

@@ -1,8 +1,8 @@
 // eslint-disable-next-line no-restricted-imports
 import styled from "@emotion/styled";
 
-import EntityMenu from "metabase/components/EntityMenu";
-import { color } from "metabase/lib/colors";
+import EntityMenu from "metabase/common/components/EntityMenu";
+import { color } from "metabase/ui/utils/colors";
 
 export const CardRoot = styled.div`
   flex: 1;

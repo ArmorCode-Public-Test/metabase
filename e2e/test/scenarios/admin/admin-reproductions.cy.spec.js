@@ -115,35 +115,38 @@ describe("issue 41765", { tags: "@external" }, () => {
     });
   }
 
-  it(
-    "re-syncing a database should invalidate the table cache (metabase#41765)",
-    { tags: "@flaky" },
-    () => {
-      cy.visit("/");
+  it("re-syncing a database should invalidate the table cache (metabase#41765)", () => {
+    cy.visit("/");
+    cy.findByTestId("loading-indicator").should("not.exist");
 
-      H.queryWritableDB(
-        `ALTER TABLE ${TEST_TABLE} ADD ${COLUMN_NAME} text;`,
-        "postgres",
-      );
+    openWritableDatabaseQuestion();
 
-      openWritableDatabaseQuestion();
+    H.getNotebookStep("data").button("Pick columns").click();
+    H.popover().findByText(COLUMN_DISPLAY_NAME).should("not.exist");
 
-      H.getNotebookStep("data").button("Pick columns").click();
-      H.popover().findByText(COLUMN_DISPLAY_NAME).should("not.exist");
+    enterAdmin();
 
-      enterAdmin();
+    H.appBar().findByText("Databases").click();
+    cy.findAllByRole("link").contains(WRITABLE_DB_DISPLAY_NAME).click();
 
-      H.appBar().findByText("Databases").click();
-      cy.findAllByRole("link").contains(WRITABLE_DB_DISPLAY_NAME).click();
-      cy.button("Sync database schema").click();
+    H.queryWritableDB(
+      `ALTER TABLE ${TEST_TABLE} ADD ${COLUMN_NAME} text;`,
+      "postgres",
+    );
 
-      exitAdmin();
-      openWritableDatabaseQuestion();
+    cy.button("Sync database schema").click();
+    H.waitForSyncToFinish({
+      iteration: 0,
+      dbId: WRITABLE_DB_ID,
+      tableName: TEST_TABLE,
+    });
 
-      H.getNotebookStep("data").button("Pick columns").click();
-      H.popover().findByText(COLUMN_DISPLAY_NAME).should("be.visible");
-    },
-  );
+    exitAdmin();
+    openWritableDatabaseQuestion();
+
+    H.getNotebookStep("data").button("Pick columns").click();
+    H.popover().findByText(COLUMN_DISPLAY_NAME).should("be.visible");
+  });
 });
 
 describe("(metabase#45042)", () => {
@@ -156,7 +159,7 @@ describe("(metabase#45042)", () => {
     cy.visit("/admin");
 
     //Ensure tabs are present in normal view
-    cy.findByRole("navigation").within(() => {
+    cy.findByTestId("admin-navbar").within(() => {
       cy.findByRole("link", { name: "Settings" }).should("exist");
       cy.findByRole("link", { name: "Exit admin" }).should("exist");
     });
@@ -165,7 +168,7 @@ describe("(metabase#45042)", () => {
     cy.viewport(500, 750);
 
     //ensure that hamburger is visible and functional
-    cy.findByRole("navigation").within(() => {
+    cy.findByTestId("admin-navbar").within(() => {
       cy.findByRole("button", { name: /burger/ })
         .should("be.visible")
         .click();
@@ -195,8 +198,8 @@ describe("(metabase#46714)", () => {
       cy.findByText("Orders").click();
     });
 
-    //TODO: Fix this shame
-    cy.wait(2000);
+    cy.findByTestId("entity-picker-modal").should("not.exist");
+    cy.findByTestId("segment-editor").findByText("Orders").should("be.visible");
 
     cy.findByTestId("segment-editor")
       .findByText("Add filters to narrow your answer")

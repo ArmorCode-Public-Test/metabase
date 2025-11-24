@@ -9,7 +9,15 @@ import type {
   SearchModel,
 } from "metabase-types/api";
 
-export type IconModel = SearchModel | CollectionItemModel | "schema";
+import type { ColorName } from "./colors/types";
+
+export type IconModel =
+  | SearchModel
+  | CollectionItemModel
+  | "schema"
+  | "timeline"
+  | "transform"
+  | "user";
 
 export type ObjectWithModel = {
   id?: unknown;
@@ -19,6 +27,9 @@ export type ObjectWithModel = {
   moderated_status?: "verified" | string | null;
   display?: CardDisplayType | null;
   type?: Collection["type"];
+  collection_type?: Collection["type"];
+  location?: Collection["location"];
+  effective_location?: Collection["location"];
   is_personal?: boolean;
 };
 
@@ -35,11 +46,15 @@ export const modelIconMap: Record<IconModel, IconName> = {
   segment: "segment",
   metric: "metric",
   snippet: "unknown",
+  document: "document",
+  timeline: "calendar",
+  transform: "refresh_downstream",
+  user: "person",
 };
 
 export type IconData = {
   name: IconName;
-  color?: string;
+  color?: ColorName;
 };
 
 /** get an Icon for any entity object, doesn't depend on the entity system */

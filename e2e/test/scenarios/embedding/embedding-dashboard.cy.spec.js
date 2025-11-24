@@ -14,6 +14,31 @@ import {
 
 const { ORDERS, PEOPLE, PRODUCTS, ORDERS_ID } = SAMPLE_DATABASE;
 
+describe("scenarios > embedding > static embedding dashboard", () => {
+  beforeEach(() => {
+    H.restore();
+    cy.signInAsAdmin();
+    cy.request("PUT", `/api/dashboard/${ORDERS_DASHBOARD_ID}`, {
+      enable_embedding: true,
+    });
+  });
+
+  it("should not call `GET /api/database` (metabase#63310)", () => {
+    cy.intercept("GET", "/api/database").as("getDatabases");
+    const payload = {
+      resource: { dashboard: ORDERS_DASHBOARD_ID },
+      params: {},
+    };
+    H.visitEmbeddedPage(payload);
+
+    cy.findByRole("heading", { name: "Orders in a dashboard" }).should(
+      "be.visible",
+    );
+    cy.log("GET /api/database should not be called");
+    cy.get("@getDatabases.all").should("have.length", 0);
+  });
+});
+
 describe("scenarios > embedding > dashboard parameters", () => {
   beforeEach(() => {
     H.restore();
@@ -104,9 +129,6 @@ describe("scenarios > embedding > dashboard parameters", () => {
       H.filterWidget().contains("Id").should("not.exist");
 
       cy.findByTestId("scalar-value").invoke("text").should("eq", "2");
-      cy.findByTestId("scalar-title")
-        .findByText("test question")
-        .should("be.visible");
 
       // verify that disabled filters don't show up
       cy.findByTestId("dashboard-parameters-widget-container").within(() => {
@@ -369,6 +391,45 @@ describe("scenarios > embedding > dashboard parameters", () => {
     });
   });
 
+  it("should allow searching dashboard parameters in preview embed modal", () => {
+    H.visitDashboard("@dashboardId");
+
+    H.openStaticEmbeddingModal({
+      activeTab: "parameters",
+      previewMode: "preview",
+    });
+
+    H.modal().within(() => {
+      // Set the Name parameter to enabled so we can test searching
+      cy.findByText("Name")
+        .parent()
+        .within(() => {
+          cy.findByText("Disabled").click();
+        });
+    });
+
+    H.popover().findByText("Editable").click();
+
+    // Test the preview iframe parameter search functionality
+    H.getIframeBody().within(() => {
+      // Open the Name filter dropdown
+      cy.findByTestId("dashboard-parameters-widget-container")
+        .findByText("Name")
+        .click();
+
+      // Test searching for names containing specific text
+      cy.findByPlaceholderText("Search by Name").type("Af");
+
+      // Verify that search results are filtered
+      H.popover().within(() => {
+        // Should show names containing "Af"
+        cy.findByText("Afton Lesch").should("be.visible");
+        // Should not show names that don't match the search
+        cy.findByText("Lina Heaney").should("not.exist");
+      });
+    });
+  });
+
   it("should render error message when `params` is not an object (metabase#14474)", () => {
     cy.get("@dashboardId").then((dashboardId) => {
       cy.request("PUT", `/api/dashboard/${dashboardId}`, {
@@ -502,24 +563,31 @@ describe("scenarios > embedding > dashboard parameters", () => {
 
     cy.log("test downloading result (metabase#36721)");
     H.getDashboardCard().realHover();
-    H.downloadAndAssert(
-      {
-        fileType: "csv",
-        isDashboard: true,
-        isEmbed: true,
-        logResults: true,
-        downloadUrl: "/api/embed/dashboard/*/dashcard/*/card/*/csv*",
-        downloadMethod: "GET",
-      },
-      (sheet) => {
-        expect(sheet["A1"].v).to.eq("ID");
-        expect(sheet["A2"].v).to.eq(9);
-        expect(sheet["B1"].v).to.eq("EAN");
-        expect(sheet["B2"].v).to.eq(7217466997444);
+    H.downloadAndAssert({
+      fileType: "csv",
+      isDashboard: true,
+      isEmbed: true,
+      downloadUrl: "/api/embed/dashboard/*/dashcard/*/card/*/csv*",
+      downloadMethod: "GET",
+    });
 
-        H.assertSheetRowsCount(54)(sheet);
-      },
+    cy.log(
+      "The PDF download button should be clickable when there is no title, but has parameters (metabase#59503)",
     );
+    cy.get("@dashboardId2").then((dashboardId) => {
+      const payload = {
+        resource: { dashboard: dashboardId },
+        params: {},
+      };
+      H.visitEmbeddedPage(payload, {
+        pageStyle: {
+          downloads: true,
+          titled: false,
+        },
+      });
+    });
+
+    cy.findByTestId("export-as-pdf-button").should("be.visible").click();
   });
 
   it("should send 'X-Metabase-Client' header for api requests", () => {
@@ -674,7 +742,7 @@ describe("scenarios > embedding > dashboard appearance", () => {
 
     H.restore();
     cy.signInAsAdmin();
-    H.setTokenFeatures("all");
+    H.activateToken("pro-self-hosted");
   });
 
   it("should not rerender the static embed preview unnecessarily (metabase#38271)", () => {
@@ -733,6 +801,15 @@ describe("scenarios > embedding > dashboard appearance", () => {
     H.modal().within(() => {
       cy.findByRole("tab", { name: "Look and Feel" }).click();
       cy.get("@previewEmbedSpy").should("have.callCount", 1);
+
+      cy.log(
+        'Embed preview requests should not have "X-Metabase-Client: embedding-iframe" header (EMB-930)',
+      );
+      cy.get("@previewEmbed").then(({ request }) => {
+        expect(request?.headers?.["x-metabase-client"]).to.not.equal(
+          "embedding-iframe",
+        );
+      });
 
       cy.log("Assert dashboard theme");
       H.getIframeBody()
@@ -1040,6 +1117,156 @@ describe("scenarios > embedding > dashboard appearance", () => {
     );
 
     H.main().should("have.css", "font-family", "Roboto, sans-serif");
+  });
+
+  it("should disable background via `#background=false` hash parameter when rendered inside an iframe (metabase#62391)", () => {
+    cy.request("PUT", `/api/dashboard/${ORDERS_DASHBOARD_ID}`, {
+      enable_embedding: true,
+    });
+    cy.signOut();
+
+    H.visitEmbeddedPage(
+      {
+        resource: { dashboard: ORDERS_DASHBOARD_ID },
+        params: {},
+      },
+      {
+        additionalHashOptions: {
+          background: "false",
+        },
+        onBeforeLoad: (window) => {
+          window.overrideIsWithinIframe = true;
+        },
+      },
+    );
+
+    cy.findByTestId("embed-frame").should("exist");
+
+    cy.get("body.mb-wrapper").should(
+      "have.css",
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
+
+    cy.window().then((win) => {
+      delete win.overrideIsWithinIframe;
+    });
+  });
+
+  it("should not disable background via `#background=false` hash parameter when rendered without an iframe", () => {
+    cy.request("PUT", `/api/dashboard/${ORDERS_DASHBOARD_ID}`, {
+      enable_embedding: true,
+    });
+    cy.signOut();
+
+    H.visitEmbeddedPage(
+      {
+        resource: { dashboard: ORDERS_DASHBOARD_ID },
+        params: {},
+      },
+      {
+        additionalHashOptions: {
+          background: "false",
+        },
+      },
+    );
+
+    cy.findByTestId("embed-frame").should("exist");
+
+    cy.get("body.mb-wrapper").should(
+      "not.have.css",
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
+  });
+
+  it("should use transparent pivot table cells in static embedding's dark mode (metabase#61741)", () => {
+    const testQuery = {
+      type: "query",
+      query: {
+        "source-table": ORDERS_ID,
+        aggregation: [["count"]],
+        breakout: [
+          [
+            "field",
+            PEOPLE.SOURCE,
+            { "base-type": "type/Text", "source-field": ORDERS.USER_ID },
+          ],
+          [
+            "field",
+            PRODUCTS.CATEGORY,
+            { "base-type": "type/Text", "source-field": ORDERS.PRODUCT_ID },
+          ],
+        ],
+      },
+      database: 1,
+    };
+
+    const pivotQuestionDetails = {
+      name: "Pivot Table Test",
+      query: testQuery.query,
+      display: "pivot",
+    };
+
+    const pivotDashboardDetails = {
+      name: "Pivot Dashboard Test",
+      enable_embedding: true,
+      embedding_params: {},
+    };
+
+    H.createQuestionAndDashboard({
+      questionDetails: pivotQuestionDetails,
+      dashboardDetails: pivotDashboardDetails,
+    }).then(({ body: { dashboard_id } }) => {
+      H.visitDashboard(dashboard_id);
+
+      H.openStaticEmbeddingModal({
+        activeTab: "parameters",
+        previewMode: "preview",
+        acceptTerms: false,
+      });
+
+      H.modal().within(() => {
+        cy.findByRole("tab", { name: "Look and Feel" }).click();
+
+        cy.log("wait until we are at the night theme");
+        cy.findByLabelText("Dark").click({ force: true });
+        H.getIframeBody()
+          .findByTestId("embed-frame")
+          .invoke("attr", "data-embed-theme")
+          .should((embedTheme) => {
+            expect(embedTheme).to.eq("night");
+          });
+
+        H.getIframeBody().findByTestId("pivot-table").should("be.visible");
+
+        H.getIframeBody().within(() => {
+          cy.findAllByTestId("pivot-table-cell").should(
+            "have.length.greaterThan",
+            0,
+          );
+
+          cy.log("dashcard should have dark background");
+          cy.findByTestId("dashcard").should(
+            "have.css",
+            "background-color",
+            "rgb(7, 23, 34)",
+          );
+
+          cy.log("pivot table cell background should be transparent");
+          cy.findAllByRole("grid")
+            .first()
+            .findAllByTestId("pivot-table-cell")
+            .first()
+            .should("have.css", "background-color", "rgba(48, 61, 70, 0.1)");
+
+          cy.log("pivot table cell color should be white");
+          cy.findByText("Row totals")
+            .should("be.visible")
+            .should("have.css", "color", "rgba(255, 255, 255, 0.95)");
+        });
+      });
+    });
   });
 });
 

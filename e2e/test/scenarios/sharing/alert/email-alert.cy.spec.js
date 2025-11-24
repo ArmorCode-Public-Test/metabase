@@ -81,7 +81,8 @@ describe("scenarios > alert > email_alert", { tags: "@external" }, () => {
     cy.log(
       "ensure that when the alert is deleted, the delete modal is correct metabase#48402",
     );
-    H.openSharingMenu("Edit alerts");
+    cy.findByLabelText("Move, trash, and more…").click();
+    H.popover().findByText("Edit alerts").click();
     H.modal().within(() => {
       cy.findByText("Edit alerts").should("be.visible");
       cy.findByText(/Created by you/).realHover();
@@ -120,7 +121,8 @@ describe("scenarios > alert > email_alert", { tags: "@external" }, () => {
       .findByText("Your alert is all set up.")
       .should("be.visible");
 
-    H.openSharingMenu("Edit alerts");
+    cy.findByLabelText("Move, duplicate, and more…").click();
+    H.popover().findByText("Edit alerts").click();
 
     H.modal().within(() => {
       cy.findByText("Edit alerts").should("be.visible");
@@ -157,7 +159,7 @@ describe("scenarios > alert > email_alert", { tags: "@external" }, () => {
     });
 
     it("should include branding for Starter instances", () => {
-      H.setTokenFeatures("none");
+      H.activateToken("starter");
       sendTestAlertForQuestion(questionName);
       cy.findAllByRole("link")
         .filter(":contains(Made with)")
@@ -170,7 +172,7 @@ describe("scenarios > alert > email_alert", { tags: "@external" }, () => {
     });
 
     it("should not include branding on Pro/Enterprise instances", () => {
-      H.setTokenFeatures("all");
+      H.activateToken("pro-self-hosted");
       sendTestAlertForQuestion(questionName);
       cy.findAllByRole("link")
         .filter(":contains(Made with)")
@@ -181,7 +183,8 @@ describe("scenarios > alert > email_alert", { tags: "@external" }, () => {
 
 function openAlertForQuestion(id) {
   H.visitQuestion(id);
-  H.openSharingMenu("Create an alert");
+  cy.findByLabelText("Move, trash, and more…").click();
+  H.popover().findByText("Create an alert").click();
 }
 
 function saveAlert() {
@@ -193,7 +196,8 @@ function saveAlert() {
   });
   cy.wait("@saveCard");
 
-  H.openSharingMenu("Create an alert");
+  cy.findByLabelText("Move, duplicate, and more…").click();
+  H.popover().findByText("Create an alert").click();
   H.modal().button("Done").click();
 }
 
@@ -206,7 +210,8 @@ function sendTestAlertForQuestion(name) {
     { visitQuestion: true },
   );
 
-  H.openSharingMenu("Create an alert");
+  cy.findByLabelText("Move, trash, and more…").click();
+  H.popover().findByText("Create an alert").click();
   H.sendAlertAndVisitIt();
   cy.findAllByRole("link").filter(`:contains(${name})`).should("be.visible");
 }

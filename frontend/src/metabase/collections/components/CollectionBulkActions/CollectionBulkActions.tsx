@@ -4,10 +4,10 @@ import _ from "underscore";
 
 import CollectionCopyEntityModal from "metabase/collections/components/CollectionCopyEntityModal";
 import { isTrashedCollection } from "metabase/collections/utils";
-import type { CollectionPickerItem } from "metabase/common/components/CollectionPicker";
-import { BulkActionBar } from "metabase/components/BulkActionBar";
-import Modal from "metabase/components/Modal";
-import { BulkMoveModal } from "metabase/containers/MoveModal";
+import { BulkActionBar } from "metabase/common/components/BulkActionBar";
+import Modal from "metabase/common/components/Modal";
+import { BulkMoveModal } from "metabase/common/components/MoveModal";
+import type { CollectionPickerItem } from "metabase/common/components/Pickers/CollectionPicker";
 import type { Collection, CollectionItem } from "metabase-types/api";
 
 import { ArchivedBulkActions } from "./ArchivedBulkActions";
@@ -52,6 +52,12 @@ export const CollectionBulkActions = memo(
       setSelectedAction(null);
       setRememberedDestination(null);
       clearSelected();
+    };
+
+    const handleCancelModal = () => {
+      setSelectedItems(null);
+      setSelectedAction(null);
+      setRememberedDestination(null);
     };
 
     const tryOrClear = (promise: Promise<any>) =>
@@ -157,7 +163,7 @@ export const CollectionBulkActions = memo(
         {selectedItems && hasSelectedItems && selectedAction === "move" && (
           <BulkMoveModal
             selectedItems={selectedItems}
-            onClose={handleCloseModal}
+            onClose={handleCancelModal}
             onMove={handleBulkMove}
             initialCollectionId={
               isTrashedCollection(collection) ? "root" : collection.id

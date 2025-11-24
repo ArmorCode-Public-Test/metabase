@@ -32,7 +32,7 @@ describe("Inaccessible Onboarding checklist", () => {
   beforeEach(() => {
     H.restore();
     cy.signInAsAdmin();
-    H.setTokenFeatures("all");
+    H.activateToken("pro-self-hosted");
   });
 
   it("should not render when embedded in an iframe", () => {
@@ -72,7 +72,7 @@ describe("Inaccessible Onboarding checklist", () => {
   });
 });
 
-H.describeWithSnowplow("Onboarding checklist events", () => {
+describe("Onboarding checklist events", () => {
   beforeEach(() => {
     H.restore();
     cy.signInAsAdmin();

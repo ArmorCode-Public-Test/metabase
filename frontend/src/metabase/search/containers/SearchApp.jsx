@@ -5,12 +5,13 @@ import { jt, t } from "ttag";
 import _ from "underscore";
 
 import { useSearchQuery } from "metabase/api";
-import EmptyState from "metabase/components/EmptyState";
-import { LoadingAndErrorWrapper } from "metabase/components/LoadingAndErrorWrapper";
-import { PaginationControls } from "metabase/components/PaginationControls";
-import { NoObjectError } from "metabase/components/errors/NoObjectError";
+import EmptyState from "metabase/common/components/EmptyState";
+import { LoadingAndErrorWrapper } from "metabase/common/components/LoadingAndErrorWrapper";
+import { PaginationControls } from "metabase/common/components/PaginationControls";
+import { NoObjectError } from "metabase/common/components/errors/NoObjectError";
+import { usePagination } from "metabase/common/hooks/use-pagination";
 import Search from "metabase/entities/search";
-import { usePagination } from "metabase/hooks/use-pagination";
+import { usePageTitle } from "metabase/hooks/use-page-title";
 import { useDispatch } from "metabase/lib/redux";
 import { SearchSidebar } from "metabase/search/components/SearchSidebar";
 import {
@@ -33,6 +34,8 @@ import { Box, Group, Paper, Text } from "metabase/ui";
 
 function SearchApp({ location }) {
   const dispatch = useDispatch();
+
+  usePageTitle(t`Search`);
 
   const { handleNextPage, handlePreviousPage, page } = usePagination();
 
@@ -72,7 +75,7 @@ function SearchApp({ location }) {
     [onChangeLocation, searchText],
   );
 
-  const { data, error, isFetching } = useSearchQuery(query);
+  const { data, error, isFetching, requestId } = useSearchQuery(query);
   const list = useMemo(() => {
     return data?.data?.map((item) => Search.wrapEntity(item, dispatch)) ?? [];
   }, [data, dispatch]);
@@ -103,7 +106,15 @@ function SearchApp({ location }) {
 
           {!error && !isFetching && list.length > 0 && (
             <Box>
-              <SearchResultSection totalResults={data.total} results={list} />
+              <SearchResultSection
+                totalResults={data.total}
+                results={list}
+                searchEngine={data.engine}
+                searchRequestId={requestId}
+                searchTerm={searchText}
+                page={page}
+                pageSize={PAGE_SIZE}
+              />
               <Group justify="flex-end" align="center" my="1rem">
                 <PaginationControls
                   showTotal

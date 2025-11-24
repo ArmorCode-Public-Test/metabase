@@ -165,7 +165,7 @@ describe("issue 14793", () => {
       .findByText(/^A closer look at/)
       .should("be.visible");
 
-    H.getDashboardCards().should("have.length", 18);
+    H.getDashboardCards().should("have.length", 35);
   });
 });
 
@@ -813,8 +813,6 @@ describe("issue 23293", () => {
     cy.findByTestId("save-question-modal").button("Save").click();
 
     cy.wait("@saveQuestion").then(({ response }) => {
-      cy.button("Not now").click();
-
       const id = response.body.id;
       const questionDetails = {
         query: {
@@ -847,7 +845,7 @@ describe("issue 23293", () => {
 
       cy.findByTestId("qb-filters-panel").should(
         "contain",
-        "Product → Category is Doohickey",
+        "Orders → Category is Doohickey",
       );
       // eslint-disable-next-line no-unsafe-element-filtering
       cy.findAllByTestId("header-cell")
@@ -991,8 +989,10 @@ describe("issue 29795", () => {
       cy.findByRole("option", { name: "USER_ID" }).click();
     });
 
-    H.visualize(() => {
-      cy.findAllByText(/User ID/i).should("have.length", 2);
+    H.visualize();
+    H.tableInteractive().within(() => {
+      cy.findByText("User ID").should("be.visible");
+      cy.findByText("native question → USER_ID").should("be.visible");
     });
   });
 });
@@ -1031,6 +1031,7 @@ describe("issue 30743", () => {
 
   it("should be possible to sort on the breakout column (metabase#30743)", () => {
     cy.findByLabelText("Sort").click();
+    H.popover().findByText("Products").click();
     H.popover().contains("Category").click();
 
     H.visualize();
@@ -1138,7 +1139,7 @@ describe("issue 39448", () => {
 });
 
 // See TODO inside this test when unskipping
-describe.skip("issue 27521", () => {
+describe("issue 27521", () => {
   beforeEach(() => {
     H.restore();
     cy.signInAsNormalUser();
@@ -1152,6 +1153,9 @@ describe.skip("issue 27521", () => {
 
     H.getNotebookStep("data").button("Pick columns").click();
     H.popover().findByText("Select all").click();
+
+    cy.log("close popover");
+    H.getNotebookStep("data").click();
 
     H.join();
 
@@ -1201,26 +1205,29 @@ describe.skip("issue 27521", () => {
     H.popover().findByText("Orders → ID").should("be.visible").click();
     H.getNotebookStep("join")
       .findByLabelText("Right column")
-      .findByText("Orders → ID")
+      .findByText("Q1 → ID")
       .should("be.visible")
       .click();
-    H.popover().findByText("ID").should("be.visible").click();
+    H.popover()
+      .findAllByText("Q1 → ID")
+      .should("have.length", 2)
+      .first()
+      .click();
 
     H.visualize();
 
     assertTableHeader(0, "ID");
     assertTableHeader(1, "Q1 → ID");
-    assertTableHeader(2, "Q1 → Orders → ID");
+    assertTableHeader(2, "Q1 → ID");
 
     H.openVizSettingsSidebar();
     cy.findByTestId("chartsettings-sidebar").within(() => {
       cy.findAllByText("ID").should("have.length", 1);
-      cy.findAllByText("Q1 → ID").should("have.length", 1);
-      cy.findAllByText("Q1 → Orders → ID").should("have.length", 1);
+      cy.findAllByText("Q1 → ID").should("have.length", 2);
 
       cy.findByRole("button", { name: "Add or remove columns" }).click();
-      cy.findAllByText("ID").should("have.length", 2);
-      cy.findAllByText("Orders → ID").should("have.length", 1);
+      cy.findAllByText("ID").should("have.length", 1);
+      cy.findAllByText("Q1 → ID").should("have.length", 2);
 
       // TODO: add assertions for what happens when toggling all the columns here
       // See https://github.com/metabase/metabase/issues/27521#issuecomment-1948658757

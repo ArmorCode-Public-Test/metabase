@@ -5,12 +5,12 @@ import PropTypes from "prop-types";
 import { push } from "react-router-redux";
 import { t } from "ttag";
 
-import { LoadingAndErrorWrapper } from "metabase/components/LoadingAndErrorWrapper";
+import { LoadingAndErrorWrapper } from "metabase/common/components/LoadingAndErrorWrapper";
 import CS from "metabase/css/core/index.css";
 import { connect } from "metabase/lib/redux";
 import * as metadataActions from "metabase/redux/metadata";
 import Detail from "metabase/reference/components/Detail";
-import EditHeader from "metabase/reference/components/EditHeader";
+import { EditHeader } from "metabase/reference/components/EditHeader";
 import EditableReferenceHeader from "metabase/reference/components/EditableReferenceHeader";
 import * as actions from "metabase/reference/reference";
 
@@ -18,7 +18,6 @@ import {
   getDatabase,
   getError,
   getFields,
-  getForeignKeys,
   getIsEditing,
   getIsFormulaExpanded,
   getLoading,
@@ -38,7 +37,6 @@ const mapStateToProps = (state, props) => {
     // naming this 'error' will conflict with redux form
     loadingError: getError(state, props),
     user: getUser(state, props),
-    foreignKeys: getForeignKeys(state, props),
     isEditing: getIsEditing(state, props),
     isFormulaExpanded: getIsFormulaExpanded(state, props),
   };

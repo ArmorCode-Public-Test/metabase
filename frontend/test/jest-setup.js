@@ -1,6 +1,6 @@
-/* eslint-disable no-undef */
 import { Crypto, CryptoKey } from "@peculiar/webcrypto";
 import { TextDecoder, TextEncoder } from "util";
+import { ReadableStream } from "web-streams-polyfill";
 import "cross-fetch/polyfill";
 import "raf/polyfill";
 import "jest-localstorage-mock";
@@ -47,6 +47,9 @@ globalThis.CryptoKey = CryptoKey;
 global.TextEncoder = JSDOMTextEncoder;
 global.TextDecoder = TextDecoder;
 
+// replace node's ReadableStream what one that matches what is in the browser
+global.ReadableStream = ReadableStream;
+
 // https://github.com/jsdom/jsdom/issues/3002
 Range.prototype.getBoundingClientRect = () => ({
   bottom: 0,
@@ -56,3 +59,43 @@ Range.prototype.getBoundingClientRect = () => ({
   top: 0,
   width: 0,
 });
+
+// Mock getClientRects for ProseMirror/TipTap compatibility in tests
+Range.prototype.getClientRects = () => ({
+  0: {
+    bottom: 0,
+    height: 0,
+    left: 0,
+    right: 0,
+    top: 0,
+    width: 0,
+  },
+  length: 1,
+  item: () => null,
+  [Symbol.iterator]: function* () {
+    yield this[0];
+  },
+});
+
+// Also mock for Elements which ProseMirror might try to call getClientRects on
+Element.prototype.getClientRects =
+  Element.prototype.getClientRects ||
+  (() => ({
+    0: {
+      bottom: 0,
+      height: 0,
+      left: 0,
+      right: 0,
+      top: 0,
+      width: 0,
+    },
+    length: 1,
+    item: () => null,
+    [Symbol.iterator]: function* () {
+      yield this[0];
+    },
+  }));
+
+// Mock elementFromPoint for ProseMirror/TipTap compatibility in tests
+document.elementFromPoint = document.elementFromPoint || (() => null);
+document.elementsFromPoint = document.elementsFromPoint || (() => []);

@@ -7,6 +7,7 @@ import {
   setupPropertiesEndpoints,
   setupSettingsEndpoints,
   setupUpdateSettingEndpoint,
+  setupUserKeyValueEndpoints,
 } from "__support__/server-mocks";
 import { renderWithProviders, screen } from "__support__/ui";
 import {
@@ -31,6 +32,11 @@ const setup = async ({ enabled }: { enabled: boolean }) => {
   fetchMock.get("path:/api/util/random_token", {
     token: "fake-token",
   });
+  setupUserKeyValueEndpoints({
+    namespace: "user_acknowledgement",
+    key: "upsell-dev_instances",
+    value: true,
+  });
 
   renderWithProviders(<StaticEmbeddingSettings />);
 
@@ -48,9 +54,15 @@ describe("StaticEmbeddingSettings", () => {
 
   it("should toggle static embedding on", async () => {
     await setup({ enabled: false });
-    const toggle = await screen.findByText("Enable static embedding");
+
+    await screen.findByText("Enable static embedding");
+
+    const toggle = screen.getByRole("switch", {
+      name: /Enable static embedding toggle/i,
+    });
 
     await userEvent.click(toggle);
+
     const puts = await findRequests("PUT");
     expect(puts).toHaveLength(1);
     const [{ url, body }] = puts;
@@ -91,5 +103,17 @@ describe("StaticEmbeddingSettings", () => {
     const [{ url, body }] = puts;
     expect(url).toContain("/setting/embedding-secret-key");
     expect(body).toEqual({ value: "fake-token" }); // we got this from the mock api
+  });
+
+  it("should show cards with related settings", async () => {
+    await setup({ enabled: true });
+
+    const relatedSettingCards = await screen.findAllByTestId(
+      "related-setting-card",
+    );
+    expect(relatedSettingCards).toHaveLength(2);
+
+    expect(await screen.findByText("Databases")).toBeInTheDocument();
+    expect(await screen.findByText("Appearance")).toBeInTheDocument();
   });
 });

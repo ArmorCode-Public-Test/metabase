@@ -3,7 +3,7 @@
   (:require
    [clojure.data.csv :as csv]
    [clojure.string :as str]
-   [metabase-enterprise.api.routes.common :as ee.api.common]
+   [metabase-enterprise.api.core :as ee.api]
    [metabase-enterprise.content-translation.dictionary :as dictionary]
    [metabase.api.common :as api]
    [metabase.api.macros :as api.macros]
@@ -21,12 +21,20 @@
 (def ^:private max-content-translation-dictionary-size-mib 1.5)
 (def ^:private max-content-translation-dictionary-size-bytes (* max-content-translation-dictionary-size-mib 1024 1024))
 
+(def ^:private sample-translations [{:locale "de" :msgid "Sample translation" :msgstr "Musterübersetzung"}
+                                    {:locale "pt_BR" :msgid "Sample translation" :msgstr "Tradução de exemplo"}
+                                    {:locale "ja" :msgid "Sample translation" :msgstr "サンプル翻訳"}
+                                    {:locale "ko" :msgid "Sample translation" :msgstr "샘플 번역"}])
+
 (api.macros/defendpoint :get "/csv"
   "Provides content translation dictionary in CSV"
   []
   (api/check-superuser)
   (let [translations (ct/get-translations)
-        csv-data (cons ["Language" "String" "Translation"]
+        translations (if (empty? translations)
+                       sample-translations
+                       translations)
+        csv-data (cons ["Locale Code" "String" "Translation"]
                        (map (fn [{:keys [locale msgid msgstr]}]
                               [locale msgid msgstr])
                             translations))]
@@ -58,8 +66,7 @@
                       {:status-code http-status-content-too-large})))
     (when-not (instance? java.io.File file)
       (throw (ex-info (tru "No file provided") {:status-code 400})))
-    (let [[_header & rows] (dictionary/read-csv file)]
-      (dictionary/import-translations! rows))
+    (dictionary/read-and-import-csv! file)
     {:success true}))
 
 (api.macros/defendpoint :get "/dictionary/:token"
@@ -74,7 +81,7 @@
     (throw (ex-info (str (tru "Locale is required.")) {:status-code 400}))))
 
 (defn- +require-content-translation [handler]
-  (ee.api.common/+require-premium-feature :content-translation (deferred-tru "Content translation") handler))
+  (ee.api/+require-premium-feature :content-translation (deferred-tru "Content translation") handler))
 
 (def ^{:arglists '([request respond raise])} routes
   "`/api/ee/content-translation` routes."

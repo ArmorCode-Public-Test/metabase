@@ -3,7 +3,8 @@
    [metabase-enterprise.sandbox.api.util :as sandbox.api.util]
    [metabase.api.common :as api]
    [metabase.api.macros :as api.macros]
-   [metabase.permissions.models.data-permissions :as data-perms]
+   [metabase.lib.core :as lib]
+   [metabase.permissions.core :as perms]
    [metabase.premium-features.core :refer [defenterprise]]
    [metabase.util :as u]
    [metabase.util.malli :as mu]
@@ -41,14 +42,13 @@
 (defn- filter-fields-for-sandboxing [table query-metadata-response]
   ;; If we have sandboxed permissions and the associated sandbox limits the fields returned, we need to make sure
   ;; the query_metadata endpoint also excludes any fields the sandbox query would exclude.
-  (if-let [sandbox-source-card (find-sandbox-source-card table api/*current-user-id*)]
-    (case (get-in sandbox-source-card [:dataset_query :type])
-      :native (update query-metadata-response :fields
-                      (partial filter-fields-by-name
-                               (->> sandbox-source-card :result_metadata (map :name) set)))
-      :query  (update query-metadata-response :fields
-                      (partial filter-fields-by-id
-                               (->> sandbox-source-card :result_metadata (map u/id) set))))
+  (if-let [{sandbox-query :dataset_query, :as sandbox-source-card} (find-sandbox-source-card table api/*current-user-id*)]
+    (update query-metadata-response :fields
+            (if (lib/native-only-query? sandbox-query)
+              (partial filter-fields-by-name
+                       (->> sandbox-source-card :result_metadata (map :name) set))
+              (partial filter-fields-by-id
+                       (->> sandbox-source-card :result_metadata (map u/id) set))))
     ;; Sandboxed via user attribute, not a source question, so no column-level sandboxing is in place
     query-metadata-response))
 
@@ -64,8 +64,8 @@
        table
          ;; if the user has sandboxed perms, temporarily upgrade their perms to read perms for the Table so they can
          ;; fetch the metadata
-       (data-perms/with-additional-table-permission :perms/view-data (:db_id table) (u/the-id table) :unrestricted
-         (data-perms/with-additional-table-permission :perms/create-queries (:db_id table) (u/the-id table) :query-builder
+       (perms/with-additional-table-permission :perms/view-data (:db_id table) (u/the-id table) :unrestricted
+         (perms/with-additional-table-permission :perms/create-queries (:db_id table) (u/the-id table) :query-builder
            (thunk))))
       ;; Not sandboxed, so user can fetch full metadata
       (thunk))))
@@ -80,12 +80,18 @@
        table
          ;; if the user has sandboxed perms, temporarily upgrade their perms to read perms for the Table so they can
          ;; fetch the metadata
-       (data-perms/with-additional-table-permission :perms/view-data (:db_id table) (u/the-id table) :unrestricted
-         (data-perms/with-additional-table-permission :perms/create-queries (:db_id table) (u/the-id table) :query-builder
+       (perms/with-additional-table-permission :perms/view-data (:db_id table) (u/the-id table) :unrestricted
+         (perms/with-additional-table-permission :perms/create-queries (:db_id table) (u/the-id table) :query-builder
            table)))
       ;; Not sandboxed, so user can fetch full metadata
       table)))
 
+;; TODO (Cam 10/28/25) -- fix this endpoint route to use kebab-case for consistency with the rest of our REST API
+;;
+;; TODO (Cam 10/28/25) -- fix this endpoint so it uses kebab-case for query parameters for consistency with the rest
+;; of the REST API
+#_{:clj-kondo/ignore [:metabase/validate-defendpoint-route-uses-kebab-case
+                      :metabase/validate-defendpoint-query-params-use-kebab-case]}
 (api.macros/defendpoint :get "/:id/query_metadata"
   "This endpoint essentially acts as a wrapper for the OSS version of this route. When a user has sandboxed permissions
   that only gives them access to a subset of columns for a given table, those inaccessable columns should also be

@@ -1,12 +1,17 @@
 import { t } from "ttag";
 
-import { ToolbarButton } from "metabase/components/ToolbarButton";
+import { ToolbarButton } from "metabase/common/components/ToolbarButton";
 import { useMetabotAgent } from "metabase-enterprise/metabot/hooks";
 
-export const AIQuestionAnalysisButton = () => {
-  const { startNewConversation } = useMetabotAgent();
+import { trackExplainChartClicked } from "../analytics";
 
-  const handleClick = () => startNewConversation("Analyze this chart");
+export const AIQuestionAnalysisButton = () => {
+  const { submitInput } = useMetabotAgent();
+
+  const handleClick = () => {
+    trackExplainChartClicked();
+    submitInput("Analyze this chart");
+  };
 
   const tooltipLabel = t`Explain this chart`;
 

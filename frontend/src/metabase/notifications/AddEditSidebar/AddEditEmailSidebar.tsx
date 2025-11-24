@@ -2,11 +2,11 @@ import cx from "classnames";
 import { t } from "ttag";
 import _ from "underscore";
 
-import SendTestPulse from "metabase/components/SendTestPulse";
 import SchedulePicker, {
   type ScheduleChangeProp,
-} from "metabase/containers/SchedulePicker";
-import Toggle from "metabase/core/components/Toggle";
+} from "metabase/common/components/SchedulePicker";
+import SendTestPulse from "metabase/common/components/SendTestPulse";
+import Toggle from "metabase/common/components/Toggle";
 import CS from "metabase/css/core/index.css";
 import { Sidebar } from "metabase/dashboard/components/Sidebar";
 import { dashboardPulseIsValid } from "metabase/lib/pulse";
@@ -30,7 +30,7 @@ import type {
 
 import { CaveatMessage } from "./CaveatMessage";
 import DefaultParametersSection from "./DefaultParametersSection";
-import DeleteSubscriptionAction from "./DeleteSubscriptionAction";
+import { DeleteSubscriptionAction } from "./DeleteSubscriptionAction";
 import Heading from "./Heading";
 import { CHANNEL_NOUN_PLURAL } from "./constants";
 

@@ -15,7 +15,9 @@ describe("scenarios > alert", () => {
   describe("with nothing set", () => {
     it("should prompt you to add email/slack credentials", () => {
       H.visitQuestion(ORDERS_QUESTION_ID);
-      H.openSharingMenu("Create an alert");
+
+      cy.findByLabelText("Move, trash, and more…").click();
+      H.popover().findByText("Create an alert").click();
 
       H.modal().within(() => {
         cy.findByText(
@@ -29,7 +31,7 @@ describe("scenarios > alert", () => {
         cy.findByText("Set up Slack")
           .should("be.visible")
           .closest("a")
-          .should("have.attr", "href", "/admin/settings/notifications/slack");
+          .should("have.attr", "href", "/admin/settings/notifications");
         cy.findByText("Add a webhook")
           .should("be.visible")
           .closest("a")
@@ -41,11 +43,13 @@ describe("scenarios > alert", () => {
       cy.signInAsNormalUser();
 
       H.visitQuestion(ORDERS_QUESTION_ID);
-      H.openSharingMenu("Create an alert");
+
+      cy.findByLabelText("Move, trash, and more…").click();
+      H.popover().findByText("Create an alert").click();
 
       H.modal().within(() => {
         cy.findByText(
-          "To get notified when something happens, or to send this chart on a schedule, ask your Admin to set up SMTP, Slack, or a webhook.",
+          "To get notified when something happens, or to send this chart on a schedule, ask your Admin to set up SMTP or Slack.",
         );
 
         cy.findByText("Set up SMTP").should("not.exist");
@@ -70,7 +74,9 @@ describe("scenarios > alert", () => {
 
     it("should be able to create and delete alerts with webhooks enabled", () => {
       H.visitQuestion(ORDERS_QUESTION_ID);
-      H.openSharingMenu("Create an alert");
+
+      cy.findByLabelText("Move, trash, and more…").click();
+      H.popover().findByText("Create an alert").click();
 
       H.addNotificationHandlerChannel("Bar Hook");
 
@@ -78,7 +84,8 @@ describe("scenarios > alert", () => {
 
       H.notificationList().findByText("Your alert is all set up.");
 
-      H.openSharingMenu("Edit alerts");
+      cy.findByLabelText("Move, trash, and more…").click();
+      H.popover().findByText("Edit alerts").click();
 
       H.modal().within(() => {
         cy.findByText("Edit alerts").should("be.visible");
@@ -129,10 +136,12 @@ describe("scenarios > alert", () => {
       { visitQuestion: true },
     );
 
-    H.openSharingMenu("Create an alert");
+    cy.findByLabelText("Move, duplicate, and more…").click();
+    H.popover().findByText("Create an alert").click();
     H.modal().button("Done").click();
 
-    H.openSharingMenu("Edit alerts");
+    cy.findByLabelText("Move, duplicate, and more…").click();
+    H.popover().findByText("Edit alerts").click();
     H.modal().within(() => {
       cy.findByText("Edit alerts").should("be.visible");
       cy.findByText(/Created by you/).should("be.visible");
@@ -147,9 +156,10 @@ describe("scenarios > alert", () => {
       const deniedDomain = "metabase.example";
       const deniedEmail = `mailer@${deniedDomain}`;
       // We're not exposing allowed domains to normal users.
-      const normalError = `The following email addresses are not allowed: ${deniedEmail}`;
-      const adminSubscriptionError = `You're only allowed to email subscriptions to addresses ending in ${allowedDomain}`;
+      const normalUserAlertError = `Failed save alert. The following email addresses are not allowed: ${deniedEmail}`;
+      const normalUserSubscriptionError = `Cannot create subscription. The following email addresses are not allowed: ${deniedEmail} Please contact your administrator.`;
       const adminAlertError = `You're only allowed to email alerts to addresses ending in ${allowedDomain}`;
+      const adminSubscriptionError = `You're only allowed to email subscriptions to addresses ending in ${allowedDomain}`;
 
       function addEmailRecipient(email) {
         cy.findByRole("textbox").click().type(`${email}`).blur();
@@ -162,7 +172,7 @@ describe("scenarios > alert", () => {
       beforeEach(() => {
         H.restore();
         cy.signInAsAdmin();
-        H.setTokenFeatures("all");
+        H.activateToken("pro-self-hosted");
         H.setupSMTP();
         setAllowedDomains();
       });
@@ -170,7 +180,8 @@ describe("scenarios > alert", () => {
       it("should validate approved email domains for a question alert", () => {
         H.visitQuestion(ORDERS_QUESTION_ID);
 
-        H.openSharingMenu("Create an alert");
+        cy.findByLabelText("Move, trash, and more…").click();
+        H.popover().findByText("Create an alert").click();
 
         H.modal().within(() => {
           cy.findByText("New alert").should("be.visible");
@@ -203,7 +214,8 @@ describe("scenarios > alert", () => {
         cy.signInAsNormalUser();
         H.visitQuestion(ORDERS_QUESTION_ID);
 
-        H.openSharingMenu("Create an alert");
+        cy.findByLabelText("Move, trash, and more…").click();
+        H.popover().findByText("Create an alert").click();
         H.modal().within(() => {
           cy.findByText("New alert").should("be.visible");
 
@@ -215,7 +227,7 @@ describe("scenarios > alert", () => {
         });
         cy.findByTestId("toast-undo").within(() => {
           cy.root().should("have.attr", "color", "error");
-          cy.findByText(normalError);
+          cy.root().should("have.text", normalUserAlertError);
         });
 
         H.visitDashboard(ORDERS_DASHBOARD_ID);
@@ -228,7 +240,7 @@ describe("scenarios > alert", () => {
         });
         cy.findByTestId("toast-undo").within(() => {
           cy.root().should("have.attr", "color", "error");
-          cy.findByText(normalError);
+          cy.root().should("have.text", normalUserSubscriptionError);
         });
       });
     },

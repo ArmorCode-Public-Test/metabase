@@ -12,6 +12,7 @@
    [metabase.util.log :as log]
    [metabase.util.malli :as mu]
    [metabase.util.malli.schema :as ms]
+   [metabase.warehouse-schema.models.field-user-settings :as schema.field-user-settings]
    [toucan2.core :as t2]))
 
 (defn- compute-new-visibility-type [db field-metadata]
@@ -36,8 +37,12 @@
          old-semantic-type              :semantic-type
          old-database-position          :database-position
          old-position                   :position
+         old-pk                         :pk?
          old-database-name              :name
+         old-database-default           :database-default
          old-database-is-auto-increment :database-is-auto-increment
+         old-database-is-generated      :database-is-generated
+         old-database-is-nullable       :database-is-nullable
          old-db-partitioned             :database-partitioned
          old-db-required                :database-required
          old-visibility-type            :visibility-type} metabase-field
@@ -46,7 +51,11 @@
          new-field-comment              :field-comment
          new-database-position          :database-position
          new-database-name              :name
+         new-pk                         :pk?
+         new-database-default           :database-default
          new-database-is-auto-increment :database-is-auto-increment
+         new-database-is-generated      :database-is-generated
+         new-database-is-nullable       :database-is-nullable
          new-db-partitioned             :database-partitioned
          new-db-required                :database-required} field-metadata
         new-visibility-type             (compute-new-visibility-type database field-metadata)
@@ -77,7 +86,11 @@
         ;; different they have the same canonical representation (lower-casing at the moment).
         new-name? (not= old-database-name new-database-name)
 
+        new-pk?                  (not= old-pk new-pk)
+        new-db-default?          (not= old-database-default new-database-default)
         new-db-auto-incremented? (not= old-database-is-auto-increment new-database-is-auto-increment)
+        new-db-generated?        (not= old-database-is-generated new-database-is-generated)
+        new-db-nullable?         (not= old-database-is-nullable new-database-is-nullable)
         new-db-partitioned?      (not= new-db-partitioned old-db-partitioned)
         new-db-required?         (not= old-db-required new-db-required)
         new-visibility-type?     (not= old-visibility-type new-visibility-type)
@@ -96,14 +109,17 @@
                       (common/field-metadata-name-for-logging table metabase-field)
                       old-base-type
                       new-base-type)
-           {:base_type           new-base-type
-            :effective_type      new-base-type
-            :coercion_strategy   nil
-            ;; reset fingerprint version so this field will get re-fingerprinted and analyzed
-            :fingerprint_version 0
-            :fingerprint         nil
-            ;; semantic type needs to be set to nil so that the fingerprinter can re-infer it during analysis
-            :semantic_type       nil})
+           (doto
+            {:base_type           new-base-type
+             :effective_type      new-base-type
+             :coercion_strategy   nil
+                ;; reset fingerprint version so this field will get re-fingerprinted and analyzed
+             :fingerprint_version 0
+             :fingerprint         nil
+                ;; semantic type needs to be set to nil so that the fingerprinter can re-infer it during analysis
+             :semantic_type       nil}
+             ;; we must override user-set values
+             (->> (schema.field-user-settings/upsert-user-settings metabase-field))))
          (when new-semantic-type?
            (log/infof "Semantic type of %s has changed from '%s' to '%s'."
                       (common/field-metadata-name-for-logging table metabase-field)
@@ -133,12 +149,41 @@
                       old-database-name
                       new-database-name)
            {:name new-database-name})
+         (when new-pk?
+           ;; this guard avoids spamming logs with pk changes when people first upgrade to support database_is_pk
+           (when (or ;; if we have any value for the old database_is_pk we have upgraded already, and can log regardless
+                  (some? old-pk)
+                     ;; otherwise, log only if logical pk status has changed
+                  (not= new-pk (= old-semantic-type :type/PK)))
+             (log/infof "Database pk of %s has changed from '%s' to '%s'"
+                        (common/field-metadata-name-for-logging table metabase-field)
+                        old-pk
+                        new-pk))
+           {:database_is_pk new-pk})
          (when new-db-auto-incremented?
            (log/infof "Database auto incremented of %s has changed from '%s' to '%s'."
                       (common/field-metadata-name-for-logging table metabase-field)
                       old-database-is-auto-increment
                       new-database-is-auto-increment)
            {:database_is_auto_increment new-database-is-auto-increment})
+         (when new-db-generated?
+           (log/infof "Database generated of %s has changed from '%s' to '%s'."
+                      (common/field-metadata-name-for-logging table metabase-field)
+                      old-database-is-generated
+                      new-database-is-generated)
+           {:database_is_generated new-database-is-generated})
+         (when new-db-nullable?
+           (log/infof "Database nullable of %s has changed from '%s' to '%s'."
+                      (common/field-metadata-name-for-logging table metabase-field)
+                      old-database-is-nullable
+                      new-database-is-nullable)
+           {:database_is_nullable new-database-is-nullable})
+         (when new-db-default?
+           (log/infof "Database default of %s has changed from '%s' to '%s'."
+                      (common/field-metadata-name-for-logging table metabase-field)
+                      old-database-default
+                      new-database-default)
+           {:database_default new-database-default})
          (when new-db-partitioned?
            (log/infof "Database partitioned of %s has changed from '%s' to '%s'."
                       (common/field-metadata-name-for-logging table metabase-field)

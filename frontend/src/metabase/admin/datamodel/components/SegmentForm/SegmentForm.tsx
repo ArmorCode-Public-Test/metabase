@@ -8,14 +8,14 @@ import {
   getSegmentQuery,
   getSegmentQueryDefinition,
 } from "metabase/admin/datamodel/utils/segments";
-import { FieldSet } from "metabase/components/FieldSet";
-import Button from "metabase/core/components/Button/Button";
+import Button from "metabase/common/components/Button/Button";
+import { FieldSet } from "metabase/common/components/FieldSet";
 import { useSelector } from "metabase/lib/redux";
 import { SegmentEditor } from "metabase/querying/segments/components/SegmentEditor";
 import { getMetadata } from "metabase/selectors/metadata";
 import * as Lib from "metabase-lib";
 import type Metadata from "metabase-lib/v1/metadata/Metadata";
-import type { Segment, StructuredQuery, TableId } from "metabase-types/api";
+import type { DatasetQuery, Segment, TableId } from "metabase-types/api";
 
 import FormInput from "../FormInput";
 import FormLabel from "../FormLabel";
@@ -179,7 +179,7 @@ const getFormErrors = (values: Partial<Segment>, metadata: Metadata) => {
 };
 
 function getSegmentEditorProps(
-  definitionProps: FieldInputProps<StructuredQuery | undefined>,
+  definitionProps: FieldInputProps<DatasetQuery | undefined>,
   tableIdProps: FieldInputProps<TableId | undefined>,
   metadata: Metadata,
 ) {

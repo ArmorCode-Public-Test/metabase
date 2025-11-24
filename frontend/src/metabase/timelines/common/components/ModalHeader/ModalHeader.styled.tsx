@@ -1,10 +1,10 @@
 // eslint-disable-next-line no-restricted-imports
 import styled from "@emotion/styled";
 
-import IconButtonWrapper from "metabase/components/IconButtonWrapper";
-import { Ellipsified } from "metabase/core/components/Ellipsified";
-import { color } from "metabase/lib/colors";
+import { Ellipsified } from "metabase/common/components/Ellipsified";
+import IconButtonWrapper from "metabase/common/components/IconButtonWrapper";
 import { Icon } from "metabase/ui";
+import { color } from "metabase/ui/utils/colors";
 
 export const HeaderLink = styled.div`
   display: flex;

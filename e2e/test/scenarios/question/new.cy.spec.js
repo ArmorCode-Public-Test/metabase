@@ -61,9 +61,7 @@ describe("scenarios > question > new", () => {
         cy.findByText("Everywhere").click();
         cy.findAllByTestId("result-item").should("have.length.at.least", 4);
 
-        const searchResultItems = cy.findAllByTestId("result-item");
-
-        searchResultItems.then(($results) => {
+        cy.findAllByTestId("result-item").then(($results) => {
           const types = $results
             .toArray()
             .map((element) => element.getAttribute("data-model-type"));
@@ -533,10 +531,7 @@ describe("scenarios > question > new", () => {
 
       cy.findByTestId("save-question-modal").should("not.exist");
 
-      H.modal().within(() => {
-        cy.findByText(/add this to a dashboard/i);
-        cy.button("Yes please!").click();
-      });
+      H.checkSavedToCollectionQuestionToast(true);
 
       H.entityPickerModal().within(() => {
         cy.findByText("Add this question to a dashboard").should("be.visible");
@@ -567,7 +562,7 @@ describe("scenarios > question > new", () => {
       cy.findByTestId("save-question-modal").button("Save").click();
       cy.wait("@createQuestion");
 
-      cy.get("#QuestionSavedModal").findByText("Yes please!").click();
+      H.checkSavedToCollectionQuestionToast(true);
 
       H.entityPickerModal().within(() => {
         cy.findByText("Add this question to a dashboard").should("be.visible");
@@ -606,9 +601,7 @@ describe("scenarios > question > new", () => {
           cy.wait("@createQuestion");
         });
 
-        cy.get("#QuestionSavedModal").within(() => {
-          cy.findByText("Yes please!").click();
-        });
+        H.checkSavedToCollectionQuestionToast(true);
       });
 
       it("when selecting a collection", () => {

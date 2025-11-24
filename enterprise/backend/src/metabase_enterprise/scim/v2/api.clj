@@ -9,8 +9,7 @@
    [metabase.api.macros :as api.macros]
    [metabase.models.interface :as mi]
    [metabase.permissions.core :as perms]
-   [metabase.permissions.models.permissions-group :as perms-group]
-   [metabase.users.models.user :as user]
+   [metabase.users.schema :as users.schema]
    [metabase.util :as u]
    [metabase.util.i18n :as i18n]
    [metabase.util.malli :as mu]
@@ -69,7 +68,9 @@
    [:Operations
     [:sequential [:map
                   [:op ms/NonBlankString]
-                  [:value [:or ms/NonBlankString ms/BooleanValue]]]]]])
+                  [:value [:or [:map-of [:or :keyword :string]
+                                [:or ms/NonBlankString ms/BooleanValue]]
+                           ms/NonBlankString ms/BooleanValue]]]]]])
 
 (def SCIMGroup
   "Malli schema for a SCIM group."
@@ -141,8 +142,8 @@
                                                               :join [[:permissions_group :pg] [:= :pg.id :group_id]]
                                                               :where [:and
                                                                       [:in :user_id (map u/the-id users)]
-                                                                      [:not= :pg.id (:id (perms-group/all-users))]
-                                                                      [:not= :pg.id (:id (perms-group/admin))]]}))
+                                                                      [:not= :pg.id (:id (perms/all-users-group))]
+                                                                      [:not= :pg.id (:id (perms/admin-group))]]}))
           membership->group    (fn [membership] (select-keys membership [:name :entity_id]))]
       (for [user users]
         (assoc user :user_group_memberships (->> (user-id->memberships (u/the-id user))
@@ -170,7 +171,7 @@
    :active   (:is_active user)
    :meta     {:resourceType "User"}})
 
-(mu/defn ^:private scim-user->mb :- user/NewUser
+(mu/defn ^:private scim-user->mb :- users.schema/NewUser
   "Given a SCIM user, returns a Metabase user."
   [user]
   (let [{email :userName name-obj :name locale :locale is-active? :active} user
@@ -249,7 +250,7 @@
       (when (t2/exists? :model/User :%lower.email (u/lower-case-en email))
         (throw-scim-error 409 "Email address is already in use"))
       (let [new-user (t2/with-transaction [_]
-                       (user/insert-new-user! mb-user)
+                       (t2/insert! :model/User mb-user)
                        (-> (t2/select-one (cons :model/User user-cols)
                                           :email (u/lower-case-en email))
                            mb-user->scim))]
@@ -281,6 +282,18 @@
                                :status      400
                                :status-code 400})))))))))
 
+(defn- patch->user-updates
+  [acc path value]
+  (if (and (nil? path) (map? value))
+    (reduce-kv patch->user-updates acc value)
+    (let [path-str (some-> path name)]
+      (case path-str
+        "active"          (assoc acc :is_active (Boolean/valueOf (u/lower-case-en value)))
+        "userName"        (assoc acc :email value)
+        "name.givenName"  (assoc acc :first_name value)
+        "name.familyName" (assoc acc :last_name value)
+        (throw-scim-error 400 (format "Unsupported path: %s" path-str))))))
+
 (api.macros/defendpoint :patch ["/Users/:id" :id #"[^/]+"]
   "Activate or deactivate a user. Supports specific replace operations, but not arbitrary patches."
   [{:keys [id]} :- [:map
@@ -293,14 +306,8 @@
             updates (reduce
                      (fn [acc operation]
                        (let [{:keys [op path value]} operation]
-                         (if (= (u/lower-case-en op) "replace")
-                           (case path
-                             "active"          (assoc acc :is_active (Boolean/valueOf (u/lower-case-en value)))
-                             "userName"        (assoc acc :email value)
-                             "name.givenName"  (assoc acc :first_name value)
-                             "name.familyName" (assoc acc :last_name value)
-                             (throw-scim-error 400 (format "Unsupported path: %s" path)))
-                           acc)))
+                         (cond-> acc
+                           (= (u/lower-case-en op) "replace") (patch->user-updates path value))))
                      {}
                      (:Operations patch-ops))]
         (t2/update! :model/User (u/the-id user) updates)
@@ -339,8 +346,8 @@
                      :entity_id entity-id
                      {:where
                       [:and
-                       [:not= :id (:id (perms-group/all-users))]
-                       [:not= :id (:id (perms-group/admin))]]})
+                       [:not= :id (:id (perms/all-users-group))]
+                       [:not= :id (:id (perms/admin-group))]]})
       (throw-scim-error 404 "Group not found")))
 
 (mu/defn ^:private mb-group->scim :- SCIMGroup
@@ -379,8 +386,8 @@
           offset         (if start-index (dec start-index) default-pagination-offset)
           filter-param   (when filter-param (codec/url-decode filter-param))
           where-clause   [:and
-                          [:not= :id (:id perms-group/all-users)]
-                          [:not= :id (:id perms-group/admin)]
+                          [:not= :id (:id perms/all-users-group)]
+                          [:not= :id (:id perms/admin-group)]
                           (when filter-param (group-filter-clause filter-param))]
           groups         (t2/select (cons :model/PermissionsGroup group-cols)
                                     {:where    where-clause
@@ -410,9 +417,9 @@
   any existing members."
   [group-id user-entity-ids]
   (let [user-ids (t2/select-fn-set :id :model/User {:where [:in :entity_id user-entity-ids]})]
-    (when-let [memberships (map
-                            (fn [user-id] {:group group-id :user user-id})
-                            user-ids)]
+    (when-let [memberships (not-empty (map
+                                       (fn [user-id] {:group group-id :user user-id})
+                                       user-ids))]
       (t2/delete! :model/PermissionsGroupMembership :group_id group-id)
       (perms/add-users-to-groups! memberships))))
 

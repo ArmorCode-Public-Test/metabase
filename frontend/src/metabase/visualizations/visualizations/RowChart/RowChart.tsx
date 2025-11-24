@@ -2,7 +2,7 @@ import type * as React from "react";
 import { useEffect, useMemo } from "react";
 import { t } from "ttag";
 
-import ExplicitSize from "metabase/components/ExplicitSize";
+import ExplicitSize from "metabase/common/components/ExplicitSize";
 import CS from "metabase/css/core/index.css";
 import { measureTextWidth } from "metabase/lib/measure-text";
 import { extractRemappedColumns } from "metabase/visualizations";
@@ -137,7 +137,6 @@ const RowChartVisualization = ({
   const theme = useRowChartTheme(
     `${fontFamily}, Arial, sans-serif`,
     isDashboard,
-    isFullscreen,
   );
 
   const chartWarnings = useMemo(
@@ -210,12 +209,10 @@ const RowChartVisualization = ({
   };
 
   const handleSelectSeries = (event: React.MouseEvent, seriesIndex: number) => {
-    const clickData = getLegendClickData(
-      seriesIndex,
-      series,
-      settings,
-      chartColumns,
-    );
+    const clickData = {
+      ...getLegendClickData(seriesIndex, series, settings, chartColumns),
+      element: event.currentTarget,
+    };
 
     const areMultipleCards = rawMultipleSeries.length > 1;
     if (areMultipleCards) {
@@ -224,10 +221,7 @@ const RowChartVisualization = ({
     }
 
     if ("breakout" in chartColumns && visualizationIsClickable(clickData)) {
-      onVisualizationClick({
-        ...clickData,
-        element: event.currentTarget,
-      });
+      onVisualizationClick(clickData);
     } else if (isDashboard) {
       openQuestion();
     }
