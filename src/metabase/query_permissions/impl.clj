@@ -229,15 +229,35 @@
         (throw (ex-info (tru "Invalid query type: {0}" query-type)
                         {:query query}))))))
 
+(defn- user-has-any-table-perms?
+  "Check if the user has any table-level permissions for the database.
+  This allows users with granular table access to run native queries."
+  [perm-type db-id]
+  (when api/*current-user-id*
+    (let [perms (t2/select :model/DataPermissions
+                           {:where [:and
+                                    [:= :group_id [:in {:select [:permissionsgroupmembership.group_id]
+                                                        :from   [:permissionsgroupmembership]
+                                                        :where  [:= :permissionsgroupmembership.user_id api/*current-user-id*]}]]
+                                    [:= :db_id db-id]
+                                    [:= :perm_type (name perm-type)]
+                                    [:not= :table_id nil]]})]
+      (boolean (seq perms)))))
+
 (defn- has-perm-for-db?
-  "Checks that the current user has at least `required-perm` for the entire DB specified by `db-id`."
+  "Checks that the current user has at least `required-perm` for the entire DB specified by `db-id`.
+  For native queries (:query-builder-and-native), also allow access if user has table-level permissions."
   [perm-type required-perm gtap-perms db-id]
   (or
    (data-perms/at-least-as-permissive? perm-type
                                        (data-perms/full-db-permission-for-user api/*current-user-id* perm-type db-id)
                                        required-perm)
    (when gtap-perms
-     (data-perms/at-least-as-permissive? perm-type gtap-perms required-perm))))
+     (data-perms/at-least-as-permissive? perm-type gtap-perms required-perm))
+   ;; Allow native queries if user has any table-level permissions for the database
+   (when (and (= perm-type :perms/create-queries)
+              (= required-perm :query-builder-and-native))
+     (user-has-any-table-perms? perm-type db-id))))
 
 (defn- has-perm-for-table?
   "Checks that the current user has the permissions for tables specified in `table-id->perm`. This can be satisfied via
