@@ -66,6 +66,21 @@
     (for [db dbs]
       (assoc db :tables (get db-id->tables (:id db) [])))))
 
+(defn- user-has-any-table-perms-for-db?
+  "Check if the user has any table-level permissions for the database.
+  This allows users with granular table access to run native queries."
+  [db-id]
+  (when api/*current-user-id*
+    (let [perms (t2/select :model/DataPermissions
+                           {:where [:and
+                                    [:= :group_id [:in {:select [:permissionsgroupmembership.group_id]
+                                                        :from   [:permissionsgroupmembership]
+                                                        :where  [:= :permissionsgroupmembership.user_id api/*current-user-id*]}]]
+                                    [:= :db_id db-id]
+                                    [:= :perm_type "perms/create-queries"]
+                                    [:not= :table_id nil]]})]
+      (boolean (seq perms)))))
+
 (mu/defn- add-native-perms-info :- [:maybe
                                     [:sequential
                                      [:map
@@ -83,11 +98,13 @@
   (for [db dbs]
     (assoc db
            :native_permissions
-           (if (= :query-builder-and-native
-                  (perms/full-db-permission-for-user
-                   api/*current-user-id*
-                   :perms/create-queries
-                   (u/the-id db)))
+           (if (or (= :query-builder-and-native
+                      (perms/full-db-permission-for-user
+                       api/*current-user-id*
+                       :perms/create-queries
+                       (u/the-id db)))
+                   ;; Also allow native queries if user has any table-level permissions
+                   (user-has-any-table-perms-for-db? (u/the-id db)))
              :write
              :none))))
 
