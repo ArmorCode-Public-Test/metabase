@@ -71,15 +71,14 @@
   This allows users with granular table access to run native queries."
   [db-id]
   (when api/*current-user-id*
-    (let [perms (t2/select :model/DataPermissions
-                           {:where [:and
-                                    [:= :group_id [:in {:select [:permissionsgroupmembership.group_id]
-                                                        :from   [:permissionsgroupmembership]
-                                                        :where  [:= :permissionsgroupmembership.user_id api/*current-user-id*]}]]
-                                    [:= :db_id db-id]
-                                    [:= :perm_type "perms/create-queries"]
-                                    [:not= :table_id nil]]})]
-      (boolean (seq perms)))))
+    (let [group-ids (t2/select-fn-set :group_id :model/PermissionsGroupMembership
+                                      :user_id api/*current-user-id*)]
+      (when (seq group-ids)
+        (t2/exists? :model/DataPermissions
+                    :group_id [:in group-ids]
+                    :db_id db-id
+                    :perm_type "perms/create-queries"
+                    :table_id [:not= nil])))))
 
 (mu/defn- add-native-perms-info :- [:maybe
                                     [:sequential

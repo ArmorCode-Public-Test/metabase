@@ -234,15 +234,14 @@
   This allows users with granular table access to run native queries."
   [perm-type db-id]
   (when api/*current-user-id*
-    (let [perms (t2/select :model/DataPermissions
-                           {:where [:and
-                                    [:= :group_id [:in {:select [:permissionsgroupmembership.group_id]
-                                                        :from   [:permissionsgroupmembership]
-                                                        :where  [:= :permissionsgroupmembership.user_id api/*current-user-id*]}]]
-                                    [:= :db_id db-id]
-                                    [:= :perm_type (name perm-type)]
-                                    [:not= :table_id nil]]})]
-      (boolean (seq perms)))))
+    (let [group-ids (t2/select-fn-set :group_id :model/PermissionsGroupMembership
+                                      :user_id api/*current-user-id*)]
+      (when (seq group-ids)
+        (t2/exists? :model/DataPermissions
+                    :group_id [:in group-ids]
+                    :db_id db-id
+                    :perm_type (name perm-type)
+                    :table_id [:not= nil])))))
 
 (defn- has-perm-for-db?
   "Checks that the current user has at least `required-perm` for the entire DB specified by `db-id`.
