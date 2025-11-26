@@ -6,6 +6,7 @@
   TODO -- does this belong HERE or in the `permissions` module?"
   (:require
    [clojure.set :as set]
+   [clojure.string :as str]
    [clojure.walk :as walk]
    [metabase.api.common :as api]
    [metabase.legacy-mbql.normalize :as mbql.normalize]
