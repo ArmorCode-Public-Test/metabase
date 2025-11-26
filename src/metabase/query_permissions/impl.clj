@@ -164,6 +164,69 @@
      query)
     (not-empty @all-ids)))
 
+(defn- extract-table-names-from-sql
+  "Extract table names from a SQL query using regex patterns.
+  Returns a set of table names (without schema prefixes)."
+  [sql]
+  (when sql
+    (let [;; Remove comments
+          sql (-> sql
+                  (str/replace #"--[^\n]*" " ")
+                  (str/replace #"/\*[\s\S]*?\*/" " "))
+          ;; Pattern for table references: FROM/JOIN <schema>.<table> or <table>
+          ;; Matches: FROM table, JOIN schema.table AS alias, etc.
+          table-pattern #"(?i)(?:FROM|JOIN)\s+(?:(?:\w+)\.)?(\w+)(?:\s+(?:AS\s+)?\w+)?"
+          ;; Pattern for table names in CTE/WITH clauses
+          cte-pattern #"(?i)WITH\s+\w+\s+AS\s*\([^)]+\)"
+          ;; Extract main table references
+          matches (re-seq table-pattern sql)
+          table-names (set (map second matches))]
+      ;; Filter out common SQL keywords that might be matched
+      (set/difference table-names
+                      #{"SELECT" "WHERE" "GROUP" "ORDER" "HAVING" "UNION" "INTERSECT" "EXCEPT"
+                        "AS" "ON" "USING" "AND" "OR" "NOT" "IN" "EXISTS" "CASE" "WHEN" "THEN"
+                        "ELSE" "END" "DISTINCT" "ALL" "ANY" "SOME" "BY" "ASC" "DESC" "LIMIT"
+                        "OFFSET" "FETCH" "FIRST" "NEXT" "ROW" "ROWS" "ONLY"}))))
+
+(defn- get-user-table-ids
+  "Get set of table IDs that the user has permissions for in the database."
+  [db-id]
+  (when api/*current-user-id*
+    (let [group-ids (t2/select-fn-set :group_id :model/PermissionsGroupMembership
+                                      :user_id api/*current-user-id*)]
+      (when (seq group-ids)
+        (t2/select-fn-set :table_id :model/DataPermissions
+                          :group_id [:in group-ids]
+                          :db_id db-id
+                          :perm_type "perms/create-queries"
+                          :table_id [:not= nil])))))
+
+(defn- validate-native-query-tables
+  "Validate that all tables referenced in the native query are accessible to the user.
+  Returns a map with :valid? boolean and :unauthorized-tables set."
+  [query db-id]
+  (try
+    (let [sql (get-in query [:native :query])
+          table-names (extract-table-names-from-sql sql)
+          user-table-ids (get-user-table-ids db-id)]
+      (if (empty? table-names)
+        ;; If no tables found (might be a complex query), allow it but log
+        {:valid? true :checked-tables #{}}
+        (let [;; Get all tables in the database with their names
+              db-tables (t2/select [:model/Table :id :name :schema] :db_id db-id :active true)
+              table-name->id (into {} (map (juxt (comp str/lower-case :name) :id) db-tables))
+              ;; Map extracted names to IDs
+              referenced-table-ids (set (keep #(table-name->id (str/lower-case %)) table-names))
+              ;; Check which tables user doesn't have access to
+              unauthorized-tables (set/difference referenced-table-ids user-table-ids)]
+          {:valid? (empty? unauthorized-tables)
+           :unauthorized-tables unauthorized-tables
+           :checked-tables table-names})))
+    (catch Throwable e
+      (log/warnf e "Error validating native query tables for db %s" db-id)
+      ;; On error, fail closed (deny access)
+      {:valid? false :error (ex-message e)})))
+
 (defn- native-query-perms
   [query]
   (merge
@@ -340,6 +403,28 @@
     (when (or (not (has-perm-for-query? query :perms/view-data required-perms))
               (not (has-perm-for-query? query :perms/create-queries required-perms)))
       (throw (perms-exception required-perms)))
+
+    ;; For native queries with granular permissions, validate table-level access
+    (when (and (= (:type query) :native)
+               api/*current-user-id*
+               (not api/*is-superuser?*))
+      (let [db-id (:database query)
+            ;; Check if user has full DB-level permissions
+            has-full-db-perms? (= :query-builder-and-native
+                                  (data-perms/full-db-permission-for-user
+                                   api/*current-user-id*
+                                   :perms/create-queries
+                                   db-id))]
+        ;; Only validate tables if user has granular (table-level) permissions
+        (when-not has-full-db-perms?
+          (let [validation (validate-native-query-tables query db-id)]
+            (when-not (:valid? validation)
+              (throw (ex-info (tru "You do not have permissions to access all tables in this native query.")
+                              {:type                 qp.error-type/missing-required-permissions
+                               :unauthorized-tables  (:unauthorized-tables validation)
+                               :checked-tables       (:checked-tables validation)
+                               :error                (:error validation)
+                               :permissions-error?   true})))))))
 
     true
     (catch clojure.lang.ExceptionInfo e
