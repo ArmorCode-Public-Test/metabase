@@ -245,7 +245,7 @@
 
 (defn- has-perm-for-db?
   "Checks that the current user has at least `required-perm` for the entire DB specified by `db-id`.
-  For native queries (:query-builder-and-native), also allow access if user has table-level permissions."
+  For native queries, also allow access if user has table-level permissions."
   [perm-type required-perm gtap-perms db-id]
   (or
    (data-perms/at-least-as-permissive? perm-type
@@ -253,9 +253,13 @@
                                        required-perm)
    (when gtap-perms
      (data-perms/at-least-as-permissive? perm-type gtap-perms required-perm))
-   ;; Allow native queries if user has any table-level permissions for the database
+   ;; Allow native queries if user has any table-level create-queries permissions
    (when (and (= perm-type :perms/create-queries)
               (= required-perm :query-builder-and-native))
+     (user-has-any-table-perms? perm-type db-id))
+   ;; Allow unrestricted view-data access if user has any table-level view-data permissions
+   (when (and (= perm-type :perms/view-data)
+              (= required-perm :unrestricted))
      (user-has-any-table-perms? perm-type db-id))))
 
 (defn- has-perm-for-table?
