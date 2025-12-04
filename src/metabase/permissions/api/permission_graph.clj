@@ -57,7 +57,7 @@
 (def ^:private Perms
   "Perms that get reused for TablePerms and SchemaPerms"
   [:enum
-   :all :segmented :none :full :limited :unrestricted :legacy-no-self-service :sandboxed :query-builder :no :blocked])
+   :all :segmented :none :full :limited :unrestricted :legacy-no-self-service :sandboxed :query-builder :query-builder-and-native :no :blocked])
 
 (def ^:private TablePerms
   [:or Perms [:map
