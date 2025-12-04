@@ -201,7 +201,7 @@
         (t2/select-fn-set :table_id :model/DataPermissions
                           :group_id [:in group-ids]
                           :db_id db-id
-                          :perm_type "perms/create-queries"
+                          :perm_type (u/qualified-name :perms/create-queries)
                           :perm_value "query-builder-and-native"
                           :table_id [:not= nil])))))
 
@@ -310,14 +310,14 @@
           (t2/exists? :model/DataPermissions
                       :group_id [:in group-ids]
                       :db_id db-id
-                      :perm_type (name perm-type)
+                      :perm_type (u/qualified-name perm-type)
                       :perm_value "query-builder-and-native"
                       :table_id [:not= nil])
           ;; For view-data, any table-level permission is sufficient
           (t2/exists? :model/DataPermissions
                       :group_id [:in group-ids]
                       :db_id db-id
-                      :perm_type (name perm-type)
+                      :perm_type (u/qualified-name perm-type)
                       :table_id [:not= nil]))))))
 
 (defn- has-perm-for-db?
