@@ -189,8 +189,10 @@
                         "ELSE" "END" "DISTINCT" "ALL" "ANY" "SOME" "BY" "ASC" "DESC" "LIMIT"
                         "OFFSET" "FETCH" "FIRST" "NEXT" "ROW" "ROWS" "ONLY"}))))
 
-(defn- get-user-table-ids
-  "Get set of table IDs that the user has permissions for in the database."
+(defn- get-user-native-query-table-ids
+  "Get set of table IDs that the user has native query permissions for in the database.
+  Only returns tables where the user has :query-builder-and-native permission,
+  not just :query-builder (which only allows Query Builder access)."
   [db-id]
   (when api/*current-user-id*
     (let [group-ids (t2/select-fn-set :group_id :model/PermissionsGroupMembership
@@ -200,6 +202,7 @@
                           :group_id [:in group-ids]
                           :db_id db-id
                           :perm_type "perms/create-queries"
+                          :perm_value "query-builder-and-native"
                           :table_id [:not= nil])))))
 
 (defn- validate-native-query-tables
@@ -209,7 +212,7 @@
   (try
     (let [sql (get-in query [:native :query])
           table-names (extract-table-names-from-sql sql)
-          user-table-ids (get-user-table-ids db-id)]
+          user-table-ids (get-user-native-query-table-ids db-id)]
       (if (empty? table-names)
         ;; If no tables found (might be a complex query), allow it but log
         {:valid? true :checked-tables #{}}
@@ -293,23 +296,33 @@
         (throw (ex-info (tru "Invalid query type: {0}" query-type)
                         {:query query}))))))
 
-(defn- user-has-any-table-perms?
-  "Check if the user has any table-level permissions for the database.
-  This allows users with granular table access to run native queries."
+(defn- user-has-native-query-table-perms?
+  "Check if the user has any table-level permissions for native queries in the database.
+  For :perms/create-queries, only tables with :query-builder-and-native allow native queries.
+  Tables with only :query-builder permission do NOT allow native queries."
   [perm-type db-id]
   (when api/*current-user-id*
     (let [group-ids (t2/select-fn-set :group_id :model/PermissionsGroupMembership
                                       :user_id api/*current-user-id*)]
       (when (seq group-ids)
-        (t2/exists? :model/DataPermissions
-                    :group_id [:in group-ids]
-                    :db_id db-id
-                    :perm_type (name perm-type)
-                    :table_id [:not= nil])))))
+        (if (= perm-type :perms/create-queries)
+          ;; For create-queries, only query-builder-and-native allows native queries
+          (t2/exists? :model/DataPermissions
+                      :group_id [:in group-ids]
+                      :db_id db-id
+                      :perm_type (name perm-type)
+                      :perm_value "query-builder-and-native"
+                      :table_id [:not= nil])
+          ;; For view-data, any table-level permission is sufficient
+          (t2/exists? :model/DataPermissions
+                      :group_id [:in group-ids]
+                      :db_id db-id
+                      :perm_type (name perm-type)
+                      :table_id [:not= nil]))))))
 
 (defn- has-perm-for-db?
   "Checks that the current user has at least `required-perm` for the entire DB specified by `db-id`.
-  For native queries, also allow access if user has table-level permissions."
+  For native queries, also allow access if user has table-level permissions with query-builder-and-native."
   [perm-type required-perm gtap-perms db-id]
   (or
    (data-perms/at-least-as-permissive? perm-type
@@ -317,14 +330,14 @@
                                        required-perm)
    (when gtap-perms
      (data-perms/at-least-as-permissive? perm-type gtap-perms required-perm))
-   ;; Allow native queries if user has any table-level create-queries permissions
+   ;; Allow native queries if user has table-level create-queries permissions with query-builder-and-native
    (when (and (= perm-type :perms/create-queries)
               (= required-perm :query-builder-and-native))
-     (user-has-any-table-perms? perm-type db-id))
+     (user-has-native-query-table-perms? perm-type db-id))
    ;; Allow unrestricted view-data access if user has any table-level view-data permissions
    (when (and (= perm-type :perms/view-data)
               (= required-perm :unrestricted))
-     (user-has-any-table-perms? perm-type db-id))))
+     (user-has-native-query-table-perms? perm-type db-id))))
 
 (defn- has-perm-for-table?
   "Checks that the current user has the permissions for tables specified in `table-id->perm`. This can be satisfied via
